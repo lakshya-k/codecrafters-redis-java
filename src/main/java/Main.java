@@ -197,21 +197,26 @@ public class Main {
 
     public static String lpop(String[] words) {
         String key = words[4];
-        String res = null;
+        List<String> res = new ArrayList<>();
+        int cnt = 1;
+        if (words.length > 6) cnt = Integer.parseInt(words[6]);
         if (map.containsKey(key)) {
             if (map.get(key).getValueType() == ValueType.LIST) {
                 List<String> values = (List<String>) map.get(key).getValue();
-                if (values.size() > 0) {
-                    res = values.get(0);
+                int originalSize = values.size();
+
+                for (int i = 0; i < cnt && i < originalSize; ++i) {
+                    res.add(values.get(0));
                     values.remove(0);
                 }
+
                 map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
             } else {
                 return getErrorMessage("Value is not a list");
             }
         }
 
-        return getBulkString(res);
+        return cnt == 1 ? getBulkString(res.get(0)) : getRespArray(res);
     }
 
     public static int normalizeIndex(int i, int l) {
