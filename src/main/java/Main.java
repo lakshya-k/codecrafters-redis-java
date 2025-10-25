@@ -37,7 +37,7 @@ public class Main {
               System.out.println("Received ping from client: " + ping);
               System.out.println("Responding with pong");
               PrintWriter writer = new PrintWriter(outputStream, true);
-              writer.println("+PONG\\r\\n");
+              writer.println("+PONG\r\n");
               clientSocket.close();
             }
           } catch (IOException e) {
