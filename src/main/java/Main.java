@@ -1,12 +1,17 @@
+import com.sun.jdi.Value;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class Main {
-    static HashMap<String, String> keyValueMap = new HashMap<>();
-    static HashMap<String, Long> keyExpiryMap = new HashMap<>();
+    // In-memory hashmap to store key:value,expiration
+    static HashMap<String, MyPair<?>> map = new HashMap<>();
+    // In-memory hashmap to store key:list
+    static HashMap<String, List<String>> list = new HashMap<>();
 
   public static void main(String[] args){
     // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -45,7 +50,6 @@ public class Main {
                       }
                   }
               };
-
               Thread thread = new Thread(task);
               thread.start();
           }
@@ -56,38 +60,133 @@ public class Main {
   }
 
     public static String parse(String input) {
-        System.out.println("input: " + input + " end input");
         String[] words = input.split("\r\n");
-        String output = "";
-        if (words[2].equals("PING")) {
-            output = "+PONG\r\n";
-        } else if (words[2].equals("ECHO")) {
-            output = "$" + words[4].length() + "\r\n" + words[4] + "\r\n";
-        } else if (words[2].equals("SET")) {
-            keyValueMap.put(words[4], words[6]);
-            if (words.length > 8) {
-                if (words[8].equals("PX")) {
-                    keyExpiryMap.put(words[4], Long.parseLong(words[10]) + System.currentTimeMillis());
-                } else if (words[8].equals("P")) {
-                    keyExpiryMap.put(words[4], Long.parseLong(words[10]) * 1000 + System.currentTimeMillis());
-                }
-            }
-            output = "+OK\r\n";
-        } else if (words[2].equals("GET")) {
-            if (keyValueMap.containsKey(words[4])) {
-                if (keyExpiryMap.containsKey(words[4]) && keyExpiryMap.get(words[4]) < System.currentTimeMillis()) {
-                    keyValueMap.remove(words[4]);
-                    keyExpiryMap.remove(words[4]);
-                    output = "$-1\r\n";
-                } else {
-                    output = keyValueMap.get(words[4]);
-                    output = "$" + output.length() + "\r\n" + output + "\r\n";
-                }
+        System.out.println("Words: ");
+        for (String word: words) System.out.println(word);
+        String output = switch (words[2]) {
+            case "PING" -> ping();
+            case "ECHO" -> echo(words);
+            case "SET" -> set(words);
+            case "GET" -> get(words);
+            case "RPUSH" -> rpush(words);
+            default -> "";
+        };
+
+        return output;
+    }
+
+    public static String ping() {
+        return getSimpleString("PONG");
+    }
+
+    public static String echo(String[] words) {
+        return getBulkString(words[4]);
+    }
+
+    public static synchronized String set(String[] words) {
+        String key = words[4];
+        MyPair<String> value;
+        if (words.length > 8) {
+            if (words[8].equals("PX")) {
+                value = new MyPair<>(ValueType.STRING, words[6],
+                        Long.parseLong(words[10]) + System.currentTimeMillis());
             } else {
-                output = "$-1\r\n";
+                value = new MyPair<>(ValueType.STRING, words[6],
+                        Long.parseLong(words[10]) * 1000 + System.currentTimeMillis());
+            }
+        } else {
+            value = new MyPair<>(ValueType.STRING, words[6], -1L);
+        }
+        map.put(key, value);
+
+        return getSimpleString("OK");
+    }
+
+    public static synchronized String get(String[] words) {
+        String output = null;
+        if (map.containsKey(words[4])) {
+            String value = (String) map.get(words[4]).getValue();
+            Long expiry = map.get(words[4]).getExpiry();
+            if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                output = value;
+            } else {
+                map.remove(words[4]);
             }
         }
 
-        return output;
+        return getBulkString(output);
+    }
+
+    public static String rpush(String[] words) {
+        String key = words[4];
+        String element = words[6];
+        int output;
+        List<String> values = new ArrayList<>();
+        if (map.containsKey(key)) {
+            if (map.get(key).getValueType() == ValueType.LIST) {
+                values = (List<String>) map.get(key).getValue();
+                values.add(element);
+                output = values.size();
+            } else {
+                return getErrorMessage("Value is not a list");
+            }
+        } else {
+            values.add(element);
+            output = 1;
+        }
+        map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+        return getRespInteger(output);
+    }
+
+    public static String getBulkString(String s) {
+        if (s == null) return "$-1\r\n";
+        return "$" + s.length() + "\r\n" + s + "\r\n";
+    }
+
+    public static String getSimpleString(String s) {
+        return "+" + s + "\r\n";
+    }
+
+    public static String getRespInteger(int i) {
+      return ":" + i + "\r\n";
+    }
+
+    public static String getErrorMessage(String error) {
+      return "-" + error + "\r\n";
+    }
+
+    public static class MyPair<V> {
+        private final ValueType type;
+      private final V value;
+      private final Long expiry;
+
+        public MyPair(ValueType type, V value, Long expiry) {
+            this.type = type;
+            this.value = value;
+            this.expiry = expiry;
+        }
+
+        public ValueType getValueType() {
+            return type;
+        }
+
+        public V getValue() {
+            return value;
+        }
+
+        public Long getExpiry() {
+            return expiry;
+        }
+
+        @Override
+        public String toString() {
+            return "(" + type + ", " + value + ", " + expiry + ")";
+        }
+    }
+
+    public enum ValueType {
+        STRING,
+        LIST,
+        DEFAULT
     }
 }
