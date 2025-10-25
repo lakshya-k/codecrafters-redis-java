@@ -1,7 +1,7 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -22,13 +22,13 @@ public class Main {
 
           // Wait for connection from client.
           clientSocket = serverSocket.accept();
-          OutputStream outputStream = clientSocket.getOutputStream();;
 
           while(true) {
-            System.out.println("Received ping from client");
-            System.out.println("Responding with pong");
-            outputStream.write("+PONG\r\n".getBytes());
-            outputStream.flush();
+              byte[] input = new byte[1024];
+              clientSocket.getInputStream().read(input);
+              System.out.println("Received ping from client");
+              System.out.println("Responding with pong");
+              clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
           }
 
         } catch (IOException e) {
