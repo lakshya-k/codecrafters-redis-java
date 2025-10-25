@@ -35,11 +35,8 @@ public class Main {
                       while (true) {
                           byte[] input = new byte[1024];
                           clientSocket.getInputStream().read(input);
-                          String s = new String(input);
-                          if (s.length() > 2) {
-                              String output = parse(s);
-                              clientSocket.getOutputStream().write(output.getBytes());
-                          }
+                          String output = parse(new String(input));
+                          clientSocket.getOutputStream().write(output.getBytes());
                       }
                   } catch (IOException e) {
                       System.out.println("IOException: " + e.getMessage());
