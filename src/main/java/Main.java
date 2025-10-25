@@ -69,6 +69,7 @@ public class Main {
             case "lrange" -> lrange(words);
             case "lpush" -> lpush(words);
             case "llen" -> llen(words);
+            case "lpop" -> lpop(words);
             default -> "";
         };
 
@@ -192,6 +193,25 @@ public class Main {
         }
 
         return getRespInteger(res);
+    }
+
+    public static String lpop(String[] words) {
+        String key = words[4];
+        String res = null;
+        if (map.containsKey(key)) {
+            if (map.get(key).getValueType() == ValueType.LIST) {
+                List<String> values = (List<String>) map.get(key).getValue();
+                if (values.size() > 0) {
+                    res = values.get(0);
+                    values.remove(0);
+                }
+                map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            } else {
+                return getErrorMessage("Value is not a list");
+            }
+        }
+
+        return getBulkString(res);
     }
 
     public static int normalizeIndex(int i, int l) {
