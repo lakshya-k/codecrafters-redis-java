@@ -243,22 +243,55 @@ public class Main {
 
     public static String blpop(String[] words) throws InterruptedException {
         String key = words[4];
-        Long timeout = Long.parseLong(words[6]);
+        double timeout = Double.parseDouble(words[6]);
+        timeout *= 1000;
         String res = null;
 
         synchronized (lock) {
-            while (!map.containsKey(key)) {
-                lock.wait(timeout);
+            long beforeTimeInMillis = System.currentTimeMillis();
+            long remainingTime = (long)timeout;
+            List<String> values;
+            if (timeout > 0) {
+                while (!map.containsKey(key) && remainingTime > 0) {
+                    lock.wait((long) timeout);
+                    remainingTime = Math.min(0, beforeTimeInMillis + (long)timeout - System.currentTimeMillis());
+                }
+            } else {
+                while (!map.containsKey(key) ) {
+                    lock.wait();
+                }
             }
+
+            if (timeout > 0) {
+                if (remainingTime > 0) {
+                    values = (List<String>) map.get(key).getValue();
+                    while (values.size() == 0) {
+                        lock.wait(remainingTime);
+                        remainingTime = Math.min(0, beforeTimeInMillis + (long)timeout - System.currentTimeMillis());
+                    }
+                }
+            } else {
+                values = (List<String>) map.get(key).getValue();
+                while (values.size() == 0) {
+                    lock.wait();
+                }
+            }
+
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
-                    List<String> values = (List<String>) map.get(key).getValue();
-                    res = values.get(0);
-                    values.remove(0);
-                    map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+                    values = (List<String>) map.get(key).getValue();
+                    if (values.size() > 0) {
+                        res = values.get(0);
+                        values.remove(0);
+                        map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+                    } else {
+                        return getRespArray(Collections.emptyList());
+                    }
                 } else {
                     return getErrorMessage("Value is not a list");
                 }
+            } else {
+                return getNullArray();
             }
         }
 
@@ -293,6 +326,10 @@ public class Main {
         res.append("\r\n");
 
         return res.toString();
+    }
+
+    public static String getNullArray() {
+        return "*-1\r\n";
     }
 
     public static class MyPair<V> {
