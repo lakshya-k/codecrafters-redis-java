@@ -68,6 +68,7 @@ public class Main {
             case "rpush" -> rpush(words);
             case "lrange" -> lrange(words);
             case "lpush" -> lpush(words);
+            case "llen" -> llen(words);
             default -> "";
         };
 
@@ -122,22 +123,18 @@ public class Main {
         for (int i = 6; i < words.length - 1; i = i + 2) {
             elements.add(words[i]);
         }
-        int output;
         List<String> values = new ArrayList<>();
         if (map.containsKey(key)) {
             if (map.get(key).getValueType() == ValueType.LIST) {
                 values = (List<String>) map.get(key).getValue();
-                values.addAll(elements);
-                output = values.size();
             } else {
                 return getErrorMessage("Value is not a list");
             }
-        } else {
-            values.addAll(elements);
-            output = values.size();
         }
+        values.addAll(elements);
+
         map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
-        return getRespInteger(output);
+        return getRespInteger(values.size());
     }
 
     public static String lrange(String[] words) {
@@ -168,20 +165,33 @@ public class Main {
             elements.add(words[i]);
         }
         Collections.reverse(elements);
-        int output;
+        List<String> values = new ArrayList<>();
         if (map.containsKey(key)) {
             if (map.get(key).getValueType() == ValueType.LIST) {
-                List<String> values = (List<String>) map.get(key).getValue();
-                elements.addAll(values);
-                output = elements.size();
+                values = (List<String>) map.get(key).getValue();
             } else {
                 return getErrorMessage("Value is not a list");
             }
-        } else {
-            output = elements.size();
         }
-        map.put(key, new MyPair<>(ValueType.LIST, elements, -1L));
-        return getRespInteger(output);
+        values.addAll(0, elements);
+
+        map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+        return getRespInteger(values.size());
+    }
+
+    public static String llen(String[] words) {
+        String key = words[4];
+        int res = 0;
+        if (map.containsKey(key)) {
+            if (map.get(key).getValueType() == ValueType.LIST) {
+                List<String> values = (List<String>) map.get(key).getValue();
+                res = values.size();
+            } else {
+                return getErrorMessage("Value is not a list");
+            }
+        }
+
+        return getRespInteger(res);
     }
 
     public static int normalizeIndex(int i, int l) {
