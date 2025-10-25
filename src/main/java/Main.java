@@ -61,14 +61,12 @@ public class Main {
 
     public static String parse(String input) {
         String[] words = input.split("\r\n");
-        System.out.println("Words: ");
-        for (String word: words) System.out.println(word);
-        String output = switch (words[2]) {
-            case "PING" -> ping();
-            case "ECHO" -> echo(words);
-            case "SET" -> set(words);
-            case "GET" -> get(words);
-            case "RPUSH" -> rpush(words);
+        String output = switch (words[2].toLowerCase()) {
+            case "ping" -> ping();
+            case "echo" -> echo(words);
+            case "set" -> set(words);
+            case "get" -> get(words);
+            case "rpush" -> rpush(words);
             default -> "";
         };
 
@@ -119,20 +117,23 @@ public class Main {
 
     public static String rpush(String[] words) {
         String key = words[4];
-        String element = words[6];
+        List<String> elements = new ArrayList<>();
+        for (int i = 6; i < words.length - 1; i = i + 2) {
+            elements.add(words[i]);
+        }
         int output;
         List<String> values = new ArrayList<>();
         if (map.containsKey(key)) {
             if (map.get(key).getValueType() == ValueType.LIST) {
                 values = (List<String>) map.get(key).getValue();
-                values.add(element);
+                values.addAll(elements);
                 output = values.size();
             } else {
                 return getErrorMessage("Value is not a list");
             }
         } else {
-            values.add(element);
-            output = 1;
+            values.addAll(elements);
+            output = values.size();
         }
         map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
         return getRespInteger(output);
