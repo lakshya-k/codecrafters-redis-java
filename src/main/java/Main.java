@@ -1,9 +1,8 @@
-import com.sun.jdi.Value;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -148,15 +147,23 @@ public class Main {
         if (map.containsKey(key)) {
             if (map.get(key).getValueType() == ValueType.LIST) {
                 List<String> elements = (List<String>) map.get(key).getValue();
+                l = normalizeIndex(l, elements.size());
+                r = normalizeIndex(r, elements.size());
                 output = getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
             } else {
                 output = getErrorMessage("Value is not list");
             }
         } else {
-            output = getRespArray(new ArrayList<>());
+            output = getRespArray(Collections.emptyList());
         }
 
         return output;
+    }
+
+    public static int normalizeIndex(int i, int l) {
+        if (i >= 0) return i;
+        if (-1 * i > l) return 0;
+        return l + i;
     }
 
     public static String getBulkString(String s) {
