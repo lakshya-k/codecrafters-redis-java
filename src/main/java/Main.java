@@ -5,7 +5,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 
 public class Main {
-    static HashMap<String, String> map = new HashMap<>();
+    static HashMap<String, String> keyValueMap = new HashMap<>();
+    static HashMap<String, Long> keyExpiryMap = new HashMap<>();
+
   public static void main(String[] args){
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     System.out.println("Logs from your program will appear here!");
@@ -54,21 +56,33 @@ public class Main {
   }
 
     public static String parse(String input) {
+        System.out.println("input: " + input + " end input");
         String[] words = input.split("\r\n");
-        System.out.println("words[2] = " + words[2]);
         String output = "";
         if (words[2].equals("PING")) {
             output = "+PONG\r\n";
         } else if (words[2].equals("ECHO")) {
             output = "$" + words[4].length() + "\r\n" + words[4] + "\r\n";
         } else if (words[2].equals("SET")) {
-            map.put(words[4], words[6]);
+            keyValueMap.put(words[4], words[6]);
+            if (words.length > 8) {
+                if (words[8].equals("PX")) {
+                    keyExpiryMap.put(words[4], Long.parseLong(words[10]) + System.currentTimeMillis());
+                } else if (words[8].equals("P")) {
+                    keyExpiryMap.put(words[4], Long.parseLong(words[10]) * 1000 + System.currentTimeMillis());
+                }
+            }
             output = "+OK\r\n";
         } else if (words[2].equals("GET")) {
-            if (map.containsKey(words[4])) {
-                output = map.get(words[4]);
-                System.out.println("words[4]: " + words[4] + " map[words[4]] = " + map.get(words[4]));
-                output = "$" + output.length() + "\r\n" + output + "\r\n";
+            if (keyValueMap.containsKey(words[4])) {
+                if (keyExpiryMap.containsKey(words[4]) && keyExpiryMap.get(words[4]) < System.currentTimeMillis()) {
+                    keyValueMap.remove(words[4]);
+                    keyExpiryMap.remove(words[4]);
+                    output = "$-1\r\n";
+                } else {
+                    output = keyValueMap.get(words[4]);
+                    output = "$" + output.length() + "\r\n" + output + "\r\n";
+                }
             } else {
                 output = "$-1\r\n";
             }
