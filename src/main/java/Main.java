@@ -67,6 +67,7 @@ public class Main {
             case "set" -> set(words);
             case "get" -> get(words);
             case "rpush" -> rpush(words);
+            case "lrange" -> lrange(words);
             default -> "";
         };
 
@@ -139,6 +140,25 @@ public class Main {
         return getRespInteger(output);
     }
 
+    public static String lrange(String[] words) {
+        String key = words[4];
+        int l = Integer.parseInt(words[6]);
+        int r = Integer.parseInt(words[8]);
+        String output = "";
+        if (map.containsKey(key)) {
+            if (map.get(key).getValueType() == ValueType.LIST) {
+                List<String> elements = (List<String>) map.get(key).getValue();
+                output = getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
+            } else {
+                output = getErrorMessage("Value is not list");
+            }
+        } else {
+            output = getRespArray(new ArrayList<>());
+        }
+
+        return output;
+    }
+
     public static String getBulkString(String s) {
         if (s == null) return "$-1\r\n";
         return "$" + s.length() + "\r\n" + s + "\r\n";
@@ -154,6 +174,14 @@ public class Main {
 
     public static String getErrorMessage(String error) {
       return "-" + error + "\r\n";
+    }
+
+    public static String getRespArray(List<String> elements) {
+        StringBuilder res = new StringBuilder("*" + elements.size());
+        for (String e : elements) res.append("\r\n$").append(e.length()).append("\r\n").append(e);
+        res.append("\r\n");
+
+        return res.toString();
     }
 
     public static class MyPair<V> {
