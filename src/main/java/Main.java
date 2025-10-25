@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -11,6 +12,7 @@ public class Main {
     static HashMap<String, MyPair<?>> map = new HashMap<>();
     // In-memory hashmap to store key:list
     static HashMap<String, List<String>> list = new HashMap<>();
+    static Object lock = new Object();
 
   public static void main(String[] args){
     // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -39,6 +41,8 @@ public class Main {
                       }
                   } catch (IOException e) {
                       System.out.println("IOException: " + e.getMessage());
+                  } catch (InterruptedException e) {
+                      throw new RuntimeException(e);
                   } finally {
                       try {
                           if (clientSocket != null) {
@@ -58,7 +62,7 @@ public class Main {
         }
   }
 
-    public static String parse(String input) {
+    public static String parse(String input) throws InterruptedException {
         String[] words = input.split("\r\n");
         String output = switch (words[2].toLowerCase()) {
             case "ping" -> ping();
@@ -70,6 +74,7 @@ public class Main {
             case "lpush" -> lpush(words);
             case "llen" -> llen(words);
             case "lpop" -> lpop(words);
+            case "blpop" -> blpop(words);
             default -> "";
         };
 
@@ -84,7 +89,7 @@ public class Main {
         return getBulkString(words[4]);
     }
 
-    public static synchronized String set(String[] words) {
+    public static String set(String[] words) {
         String key = words[4];
         MyPair<String> value;
         if (words.length > 8) {
@@ -98,20 +103,24 @@ public class Main {
         } else {
             value = new MyPair<>(ValueType.STRING, words[6], -1L);
         }
-        map.put(key, value);
+        synchronized (lock) {
+            map.put(key, value);
+        }
 
         return getSimpleString("OK");
     }
 
-    public static synchronized String get(String[] words) {
+    public static String get(String[] words) {
         String output = null;
-        if (map.containsKey(words[4])) {
-            String value = (String) map.get(words[4]).getValue();
-            Long expiry = map.get(words[4]).getExpiry();
-            if (expiry == -1 || expiry > System.currentTimeMillis()) {
-                output = value;
-            } else {
-                map.remove(words[4]);
+        synchronized (lock) {
+            if (map.containsKey(words[4])) {
+                String value = (String) map.get(words[4]).getValue();
+                Long expiry = map.get(words[4]).getExpiry();
+                if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                    output = value;
+                } else {
+                    map.remove(words[4]);
+                }
             }
         }
 
@@ -125,16 +134,19 @@ public class Main {
             elements.add(words[i]);
         }
         List<String> values = new ArrayList<>();
-        if (map.containsKey(key)) {
-            if (map.get(key).getValueType() == ValueType.LIST) {
-                values = (List<String>) map.get(key).getValue();
-            } else {
-                return getErrorMessage("Value is not a list");
+        synchronized (lock) {
+            if (map.containsKey(key)) {
+                if (map.get(key).getValueType() == ValueType.LIST) {
+                    values = (List<String>) map.get(key).getValue();
+                } else {
+                    return getErrorMessage("Value is not a list");
+                }
             }
-        }
-        values.addAll(elements);
+            values.addAll(elements);
 
-        map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            lock.notifyAll();
+        }
         return getRespInteger(values.size());
     }
 
@@ -143,17 +155,19 @@ public class Main {
         int l = Integer.parseInt(words[6]);
         int r = Integer.parseInt(words[8]);
         String output = "";
-        if (map.containsKey(key)) {
-            if (map.get(key).getValueType() == ValueType.LIST) {
-                List<String> elements = (List<String>) map.get(key).getValue();
-                l = normalizeIndex(l, elements.size());
-                r = normalizeIndex(r, elements.size());
-                output = getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
+        synchronized (lock) {
+            if (map.containsKey(key)) {
+                if (map.get(key).getValueType() == ValueType.LIST) {
+                    List<String> elements = (List<String>) map.get(key).getValue();
+                    l = normalizeIndex(l, elements.size());
+                    r = normalizeIndex(r, elements.size());
+                    output = getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
+                } else {
+                    output = getErrorMessage("Value is not list");
+                }
             } else {
-                output = getErrorMessage("Value is not list");
+                output = getRespArray(Collections.emptyList());
             }
-        } else {
-            output = getRespArray(Collections.emptyList());
         }
 
         return output;
@@ -167,28 +181,34 @@ public class Main {
         }
         Collections.reverse(elements);
         List<String> values = new ArrayList<>();
-        if (map.containsKey(key)) {
-            if (map.get(key).getValueType() == ValueType.LIST) {
-                values = (List<String>) map.get(key).getValue();
-            } else {
-                return getErrorMessage("Value is not a list");
+        synchronized (lock) {
+            if (map.containsKey(key)) {
+                if (map.get(key).getValueType() == ValueType.LIST) {
+                    values = (List<String>) map.get(key).getValue();
+                } else {
+                    return getErrorMessage("Value is not a list");
+                }
             }
-        }
-        values.addAll(0, elements);
+            values.addAll(0, elements);
 
-        map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            lock.notifyAll();
+        }
+
         return getRespInteger(values.size());
     }
 
     public static String llen(String[] words) {
         String key = words[4];
         int res = 0;
-        if (map.containsKey(key)) {
-            if (map.get(key).getValueType() == ValueType.LIST) {
-                List<String> values = (List<String>) map.get(key).getValue();
-                res = values.size();
-            } else {
-                return getErrorMessage("Value is not a list");
+        synchronized (lock) {
+            if (map.containsKey(key)) {
+                if (map.get(key).getValueType() == ValueType.LIST) {
+                    List<String> values = (List<String>) map.get(key).getValue();
+                    res = values.size();
+                } else {
+                    return getErrorMessage("Value is not a list");
+                }
             }
         }
 
@@ -200,23 +220,49 @@ public class Main {
         List<String> res = new ArrayList<>();
         int cnt = 1;
         if (words.length > 6) cnt = Integer.parseInt(words[6]);
-        if (map.containsKey(key)) {
-            if (map.get(key).getValueType() == ValueType.LIST) {
-                List<String> values = (List<String>) map.get(key).getValue();
-                int originalSize = values.size();
+        synchronized (lock) {
+            if (map.containsKey(key)) {
+                if (map.get(key).getValueType() == ValueType.LIST) {
+                    List<String> values = (List<String>) map.get(key).getValue();
+                    int originalSize = values.size();
 
-                for (int i = 0; i < cnt && i < originalSize; ++i) {
-                    res.add(values.get(0));
-                    values.remove(0);
+                    for (int i = 0; i < cnt && i < originalSize; ++i) {
+                        res.add(values.get(0));
+                        values.remove(0);
+                    }
+
+                    map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+                } else {
+                    return getErrorMessage("Value is not a list");
                 }
-
-                map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
-            } else {
-                return getErrorMessage("Value is not a list");
             }
         }
 
         return cnt == 1 ? getBulkString(res.get(0)) : getRespArray(res);
+    }
+
+    public static String blpop(String[] words) throws InterruptedException {
+        String key = words[4];
+        Long timeout = Long.parseLong(words[6]);
+        String res = null;
+
+        synchronized (lock) {
+            while (!map.containsKey(key)) {
+                lock.wait(timeout);
+            }
+            if (map.containsKey(key)) {
+                if (map.get(key).getValueType() == ValueType.LIST) {
+                    List<String> values = (List<String>) map.get(key).getValue();
+                    res = values.get(0);
+                    values.remove(0);
+                    map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+                } else {
+                    return getErrorMessage("Value is not a list");
+                }
+            }
+        }
+
+        return getRespArray(Arrays.asList(key, res));
     }
 
     public static int normalizeIndex(int i, int l) {
@@ -251,8 +297,8 @@ public class Main {
 
     public static class MyPair<V> {
         private final ValueType type;
-      private final V value;
-      private final Long expiry;
+        private final V value;
+        private final Long expiry;
 
         public MyPair(ValueType type, V value, Long expiry) {
             this.type = type;
