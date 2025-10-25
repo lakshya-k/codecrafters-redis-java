@@ -12,7 +12,6 @@ public class Main {
 
     //  Uncomment the code below to pass the first stage
         ServerSocket serverSocket = null;
-        Socket clientSocket = null;
         int port = 6379;
         try {
           serverSocket = new ServerSocket(port);
@@ -20,27 +19,45 @@ public class Main {
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
 
-          // Wait for connection from client.
-          clientSocket = serverSocket.accept();
 
           while(true) {
-              byte[] input = new byte[1024];
-              clientSocket.getInputStream().read(input);
-              System.out.println("Received ping from client");
-              System.out.println("Responding with pong");
-              clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+              // Wait for connection from client.
+              Socket clientSocket = serverSocket.accept();
+
+              Thread thread = new Thread(new ClientHandler(clientSocket));
+              thread.start();
+
           }
 
         } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());
-        } finally {
-          try {
-            if (clientSocket != null) {
-              clientSocket.close();
-            }
-          } catch (IOException e) {
-            System.out.println("IOException: " + e.getMessage());
-          }
         }
   }
+
+    public static class ClientHandler implements Runnable {
+        Socket clientSocket;
+
+        public ClientHandler(Socket clientSocket) {
+            this.clientSocket = clientSocket;
+        }
+        public void run() {
+            try {
+                byte[] input = new byte[1024];
+                clientSocket.getInputStream().read(input);
+                System.out.println("Received ping from client");
+                System.out.println("Responding with pong");
+                clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+            } catch (IOException e) {
+                System.out.println("IOException: " + e.getMessage());
+            } finally {
+                try {
+                    if (clientSocket != null) {
+                        clientSocket.close();
+                    }
+                } catch (IOException e) {
+                    System.out.println("IOException: " + e.getMessage());
+                }
+            }
+        }
+    }
 }
