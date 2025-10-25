@@ -1,7 +1,4 @@
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -26,7 +23,6 @@ public class Main {
 
               Thread thread = new Thread(new ClientHandler(clientSocket));
               thread.start();
-
           }
 
         } catch (IOException e) {
@@ -42,11 +38,13 @@ public class Main {
         }
         public void run() {
             try {
-                byte[] input = new byte[1024];
-                clientSocket.getInputStream().read(input);
-                System.out.println("Received ping from client");
-                System.out.println("Responding with pong");
-                clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+                while (true) {
+                    byte[] input = new byte[1024];
+                    clientSocket.getInputStream().read(input);
+                    System.out.println("Received ping from client");
+                    System.out.println("Responding with pong");
+                    clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+                }
             } catch (IOException e) {
                 System.out.println("IOException: " + e.getMessage());
             } finally {
