@@ -1,4 +1,10 @@
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -23,6 +29,15 @@ public class Main {
         } finally {
           try {
             if (clientSocket != null) {
+              InputStream inputStream = clientSocket.getInputStream();
+              OutputStream outputStream = clientSocket.getOutputStream();
+
+              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+              String ping = reader.readLine();
+              System.out.println("Received ping from client: " + ping);
+              System.out.println("Responding with pong");
+              PrintWriter writer = new PrintWriter(outputStream, true);
+              writer.println("+PONG\\r\\n");
               clientSocket.close();
             }
           } catch (IOException e) {
