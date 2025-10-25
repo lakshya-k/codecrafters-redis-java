@@ -1,10 +1,7 @@
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -22,22 +19,23 @@ public class Main {
           // Since the tester restarts your program quite often, setting SO_REUSEADDR
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
+
           // Wait for connection from client.
           clientSocket = serverSocket.accept();
+          OutputStream outputStream = clientSocket.getOutputStream();;
+
+          while(true) {
+            System.out.println("Received ping from client");
+            System.out.println("Responding with pong");
+            outputStream.write("+PONG\r\n".getBytes());
+            outputStream.flush();
+          }
+
         } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());
         } finally {
           try {
             if (clientSocket != null) {
-              InputStream inputStream = clientSocket.getInputStream();
-              OutputStream outputStream = clientSocket.getOutputStream();
-
-              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-              String ping = reader.readLine();
-              System.out.println("Received ping from client: " + ping);
-              System.out.println("Responding with pong");
-              PrintWriter writer = new PrintWriter(outputStream, true);
-              writer.println("+PONG\r");
               clientSocket.close();
             }
           } catch (IOException e) {
