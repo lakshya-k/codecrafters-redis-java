@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Arrays;
 
 public class Main {
   public static void main(String[] args){
@@ -41,9 +42,8 @@ public class Main {
                 while (true) {
                     byte[] input = new byte[1024];
                     clientSocket.getInputStream().read(input);
-                    System.out.println("Received ping from client");
-                    System.out.println("Responding with pong");
-                    clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+                    String output = RespParser.parse(new String(input));
+                    clientSocket.getOutputStream().write(output.getBytes());
                 }
             } catch (IOException e) {
                 System.out.println("IOException: " + e.getMessage());
@@ -56,6 +56,21 @@ public class Main {
                     System.out.println("IOException: " + e.getMessage());
                 }
             }
+        }
+    }
+
+    public static class RespParser {
+        public static String parse (String input) {
+            String[] words = input.split("\r\n");
+            String output = "";
+            if (words[2].equals("PING")) {
+                output = "+PONG\r\n";
+            }
+            else if (words[2].equals("ECHO")) {
+                output = "$" + words[4].length() + "\r\n" + words[4] + "\r\n";
+            }
+
+            return output;
         }
     }
 }
