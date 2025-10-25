@@ -67,6 +67,7 @@ public class Main {
             case "get" -> get(words);
             case "rpush" -> rpush(words);
             case "lrange" -> lrange(words);
+            case "lpush" -> lpush(words);
             default -> "";
         };
 
@@ -160,10 +161,32 @@ public class Main {
         return output;
     }
 
+    public static String lpush(String[] words) {
+        String key = words[4];
+        List<String> elements = new ArrayList<>();
+        for (int i = 6; i < words.length - 1; i = i + 2) {
+            elements.add(words[i]);
+        }
+        Collections.reverse(elements);
+        int output;
+        if (map.containsKey(key)) {
+            if (map.get(key).getValueType() == ValueType.LIST) {
+                List<String> values = (List<String>) map.get(key).getValue();
+                elements.addAll(values);
+                output = elements.size();
+            } else {
+                return getErrorMessage("Value is not a list");
+            }
+        } else {
+            output = elements.size();
+        }
+        map.put(key, new MyPair<>(ValueType.LIST, elements, -1L));
+        return getRespInteger(output);
+    }
+
     public static int normalizeIndex(int i, int l) {
         if (i >= 0) return i;
-        if (-1 * i > l) return 0;
-        return l + i;
+        return Math.max(0, l + i);
     }
 
     public static String getBulkString(String s) {
