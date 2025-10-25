@@ -37,7 +37,7 @@ public class Main {
                           clientSocket.getInputStream().read(input);
                           String s = new String(input);
                           if (s.length() > 2) {
-                              String output = parse(new String(input));
+                              String output = parse(s);
                               clientSocket.getOutputStream().write(output.getBytes());
                           }
                       }
