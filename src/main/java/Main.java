@@ -331,9 +331,16 @@ public class Main {
     }
 
     public static String xrange(String[] words) {
+        System.out.println("Words: ");
+        for (String w : words) System.out.println(w);
         String key = words[4];
-        String lowerLimit = words[6];
-        String upperLimit = words[8];
+        String lowerLimit = "";
+        String upperLimit = "";
+
+        if (words[6].equals("-")) lowerLimit = "0-0";
+        else lowerLimit = words[6];
+        if (words[8].equals("+")) upperLimit = Long.MAX_VALUE + "-" + Long.MAX_VALUE;
+        else upperLimit = words[8];
         String output = "";
 
         if (map.containsKey(key)) {
