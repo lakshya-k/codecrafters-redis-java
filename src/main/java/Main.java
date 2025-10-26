@@ -14,53 +14,53 @@ public class Main {
     static HashMap<String, List<String>> list = new HashMap<>();
     static Object lock = new Object();
 
-  public static void main(String[] args){
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    System.out.println("Logs from your program will appear here!");
+    public static void main(String[] args) {
+        // You can use print statements as follows for debugging, they'll be visible when running tests.
+        System.out.println("Logs from your program will appear here!");
 
-    //  Uncomment the code below to pass the first stage
+        //  Uncomment the code below to pass the first stage
         ServerSocket serverSocket = null;
         int port = 6379;
         try {
-          serverSocket = new ServerSocket(port);
-          // Since the tester restarts your program quite often, setting SO_REUSEADDR
-          // ensures that we don't run into 'Address already in use' errors
-          serverSocket.setReuseAddress(true);
+            serverSocket = new ServerSocket(port);
+            // Since the tester restarts your program quite often, setting SO_REUSEADDR
+            // ensures that we don't run into 'Address already in use' errors
+            serverSocket.setReuseAddress(true);
 
-          while(true) {
-              // Wait for connection from client.
-              Socket clientSocket = serverSocket.accept();
+            while (true) {
+                // Wait for connection from client.
+                Socket clientSocket = serverSocket.accept();
 
-              Runnable task = () -> {
-                  try {
-                      while (true) {
-                          byte[] input = new byte[1024];
-                          clientSocket.getInputStream().read(input);
-                          String output = parse(new String(input));
-                          clientSocket.getOutputStream().write(output.getBytes());
-                      }
-                  } catch (IOException e) {
-                      System.out.println("IOException: " + e.getMessage());
-                  } catch (InterruptedException e) {
-                      throw new RuntimeException(e);
-                  } finally {
-                      try {
-                          if (clientSocket != null) {
-                              clientSocket.close();
-                          }
-                      } catch (IOException e) {
-                          System.out.println("IOException: " + e.getMessage());
-                      }
-                  }
-              };
-              Thread thread = new Thread(task);
-              thread.start();
-          }
+                Runnable task = () -> {
+                    try {
+                        while (true) {
+                            byte[] input = new byte[1024];
+                            clientSocket.getInputStream().read(input);
+                            String output = parse(new String(input));
+                            clientSocket.getOutputStream().write(output.getBytes());
+                        }
+                    } catch (IOException e) {
+                        System.out.println("IOException: " + e.getMessage());
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        try {
+                            if (clientSocket != null) {
+                                clientSocket.close();
+                            }
+                        } catch (IOException e) {
+                            System.out.println("IOException: " + e.getMessage());
+                        }
+                    }
+                };
+                Thread thread = new Thread(task);
+                thread.start();
+            }
 
         } catch (IOException e) {
-          System.out.println("IOException: " + e.getMessage());
+            System.out.println("IOException: " + e.getMessage());
         }
-  }
+    }
 
     public static String parse(String input) throws InterruptedException {
         String[] words = input.split("\r\n");
@@ -75,6 +75,7 @@ public class Main {
             case "llen" -> llen(words);
             case "lpop" -> lpop(words);
             case "blpop" -> blpop(words);
+            case "type" -> type(words);
             default -> "";
         };
 
@@ -249,15 +250,15 @@ public class Main {
 
         synchronized (lock) {
             long beforeTimeInMillis = System.currentTimeMillis();
-            long remainingTime = (long)timeout;
+            long remainingTime = (long) timeout;
             List<String> values;
             if (timeout > 0) {
                 while (!map.containsKey(key) && remainingTime > 0) {
                     lock.wait((long) timeout);
-                    remainingTime = Math.min(0, beforeTimeInMillis + (long)timeout - System.currentTimeMillis());
+                    remainingTime = Math.min(0, beforeTimeInMillis + (long) timeout - System.currentTimeMillis());
                 }
             } else {
-                while (!map.containsKey(key) ) {
+                while (!map.containsKey(key)) {
                     lock.wait();
                 }
             }
@@ -267,7 +268,7 @@ public class Main {
                     values = (List<String>) map.get(key).getValue();
                     while (values.size() == 0) {
                         lock.wait(remainingTime);
-                        remainingTime = Math.min(0, beforeTimeInMillis + (long)timeout - System.currentTimeMillis());
+                        remainingTime = Math.min(0, beforeTimeInMillis + (long) timeout - System.currentTimeMillis());
                     }
                 }
             } else {
@@ -298,6 +299,17 @@ public class Main {
         return getRespArray(Arrays.asList(key, res));
     }
 
+    public static String type(String[] words) {
+        String key = words[4];
+        String res = "none";
+        synchronized (lock) {
+            if (map.containsKey(key)) {
+                res = map.get(key).getValueType().toString().toLowerCase();
+            }
+        }
+        return getSimpleString(res);
+    }
+
     public static int normalizeIndex(int i, int l) {
         if (i >= 0) return i;
         return Math.max(0, l + i);
@@ -313,11 +325,11 @@ public class Main {
     }
 
     public static String getRespInteger(int i) {
-      return ":" + i + "\r\n";
+        return ":" + i + "\r\n";
     }
 
     public static String getErrorMessage(String error) {
-      return "-" + error + "\r\n";
+        return "-" + error + "\r\n";
     }
 
     public static String getRespArray(List<String> elements) {
@@ -364,6 +376,11 @@ public class Main {
     public enum ValueType {
         STRING,
         LIST,
+        SET,
+        ZSET,
+        HASH,
+        STREAM,
+        VECTORSET,
         DEFAULT
     }
 }
