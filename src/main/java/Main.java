@@ -9,9 +9,7 @@ import java.util.List;
 
 public class Main {
     // In-memory hashmap to store key:value,expiration
-    static HashMap<String, MyPair<?>> map = new HashMap<>();
-    // In-memory hashmap to store key:list
-    static HashMap<String, List<String>> list = new HashMap<>();
+    static HashMap<String, Value<?>> map = new HashMap<>();
     static Object lock = new Object();
 
     public static void main(String[] args) {
@@ -76,6 +74,7 @@ public class Main {
             case "lpop" -> lpop(words);
             case "blpop" -> blpop(words);
             case "type" -> type(words);
+            case "xadd" -> xadd(words);
             default -> "";
         };
 
@@ -83,32 +82,32 @@ public class Main {
     }
 
     public static String ping() {
-        return getSimpleString("PONG");
+        return RespResponseUtility.getSimpleString("PONG");
     }
 
     public static String echo(String[] words) {
-        return getBulkString(words[4]);
+        return RespResponseUtility.getBulkString(words[4]);
     }
 
     public static String set(String[] words) {
         String key = words[4];
-        MyPair<String> value;
+        Value<String> value;
         if (words.length > 8) {
             if (words[8].equals("PX")) {
-                value = new MyPair<>(ValueType.STRING, words[6],
+                value = new Value<>(ValueType.STRING, words[6],
                         Long.parseLong(words[10]) + System.currentTimeMillis());
             } else {
-                value = new MyPair<>(ValueType.STRING, words[6],
+                value = new Value<>(ValueType.STRING, words[6],
                         Long.parseLong(words[10]) * 1000 + System.currentTimeMillis());
             }
         } else {
-            value = new MyPair<>(ValueType.STRING, words[6], -1L);
+            value = new Value<>(ValueType.STRING, words[6], -1L);
         }
         synchronized (lock) {
             map.put(key, value);
         }
 
-        return getSimpleString("OK");
+        return RespResponseUtility.getSimpleString("OK");
     }
 
     public static String get(String[] words) {
@@ -125,7 +124,7 @@ public class Main {
             }
         }
 
-        return getBulkString(output);
+        return RespResponseUtility.getBulkString(output);
     }
 
     public static String rpush(String[] words) {
@@ -140,15 +139,15 @@ public class Main {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     values = (List<String>) map.get(key).getValue();
                 } else {
-                    return getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("Value is not a list");
                 }
             }
             values.addAll(elements);
 
-            map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            map.put(key, new Value<>(ValueType.LIST, values, -1L));
             lock.notifyAll();
         }
-        return getRespInteger(values.size());
+        return RespResponseUtility.getRespInteger(values.size());
     }
 
     public static String lrange(String[] words) {
@@ -160,14 +159,14 @@ public class Main {
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     List<String> elements = (List<String>) map.get(key).getValue();
-                    l = normalizeIndex(l, elements.size());
-                    r = normalizeIndex(r, elements.size());
-                    output = getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
+                    l = RespResponseUtility.normalizeIndex(l, elements.size());
+                    r = RespResponseUtility.normalizeIndex(r, elements.size());
+                    output = RespResponseUtility.getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
                 } else {
-                    output = getErrorMessage("Value is not list");
+                    output = RespResponseUtility.getErrorMessage("Value is not list");
                 }
             } else {
-                output = getRespArray(Collections.emptyList());
+                output = RespResponseUtility.getRespArray(Collections.emptyList());
             }
         }
 
@@ -187,16 +186,16 @@ public class Main {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     values = (List<String>) map.get(key).getValue();
                 } else {
-                    return getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("Value is not a list");
                 }
             }
             values.addAll(0, elements);
 
-            map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+            map.put(key, new Value<>(ValueType.LIST, values, -1L));
             lock.notifyAll();
         }
 
-        return getRespInteger(values.size());
+        return RespResponseUtility.getRespInteger(values.size());
     }
 
     public static String llen(String[] words) {
@@ -208,12 +207,12 @@ public class Main {
                     List<String> values = (List<String>) map.get(key).getValue();
                     res = values.size();
                 } else {
-                    return getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("Value is not a list");
                 }
             }
         }
 
-        return getRespInteger(res);
+        return RespResponseUtility.getRespInteger(res);
     }
 
     public static String lpop(String[] words) {
@@ -232,14 +231,14 @@ public class Main {
                         values.remove(0);
                     }
 
-                    map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+                    map.put(key, new Value<>(ValueType.LIST, values, -1L));
                 } else {
-                    return getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("Value is not a list");
                 }
             }
         }
 
-        return cnt == 1 ? getBulkString(res.get(0)) : getRespArray(res);
+        return cnt == 1 ? RespResponseUtility.getBulkString(res.get(0)) : RespResponseUtility.getRespArray(res);
     }
 
     public static String blpop(String[] words) throws InterruptedException {
@@ -284,19 +283,19 @@ public class Main {
                     if (values.size() > 0) {
                         res = values.get(0);
                         values.remove(0);
-                        map.put(key, new MyPair<>(ValueType.LIST, values, -1L));
+                        map.put(key, new Value<>(ValueType.LIST, values, -1L));
                     } else {
-                        return getRespArray(Collections.emptyList());
+                        return RespResponseUtility.getRespArray(Collections.emptyList());
                     }
                 } else {
-                    return getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("Value is not a list");
                 }
             } else {
-                return getNullArray();
+                return RespResponseUtility.getNullArray();
             }
         }
 
-        return getRespArray(Arrays.asList(key, res));
+        return RespResponseUtility.getRespArray(Arrays.asList(key, res));
     }
 
     public static String type(String[] words) {
@@ -307,80 +306,26 @@ public class Main {
                 res = map.get(key).getValueType().toString().toLowerCase();
             }
         }
-        return getSimpleString(res);
+        return RespResponseUtility.getSimpleString(res);
     }
 
-    public static int normalizeIndex(int i, int l) {
-        if (i >= 0) return i;
-        return Math.max(0, l + i);
-    }
+    public static String xadd(String[] words) {
+        String key = words[4];
+        String id = words[6];
+        String output = "";
+        HashMap<String, String> input = new HashMap<>();
+        for (int i = 8; i < words.length - 1; i = i + 4) input.put(words[i], words[i + 2]);
 
-    public static String getBulkString(String s) {
-        if (s == null) return "$-1\r\n";
-        return "$" + s.length() + "\r\n" + s + "\r\n";
-    }
-
-    public static String getSimpleString(String s) {
-        return "+" + s + "\r\n";
-    }
-
-    public static String getRespInteger(int i) {
-        return ":" + i + "\r\n";
-    }
-
-    public static String getErrorMessage(String error) {
-        return "-" + error + "\r\n";
-    }
-
-    public static String getRespArray(List<String> elements) {
-        StringBuilder res = new StringBuilder("*" + elements.size());
-        for (String e : elements) res.append("\r\n$").append(e.length()).append("\r\n").append(e);
-        res.append("\r\n");
-
-        return res.toString();
-    }
-
-    public static String getNullArray() {
-        return "*-1\r\n";
-    }
-
-    public static class MyPair<V> {
-        private final ValueType type;
-        private final V value;
-        private final Long expiry;
-
-        public MyPair(ValueType type, V value, Long expiry) {
-            this.type = type;
-            this.value = value;
-            this.expiry = expiry;
+        Stream stream;
+        if (map.containsKey(key)) {
+            stream = (Stream) map.get(key).getValue();
+            output = stream.add(id, input);
+        } else {
+            stream = new Stream(id, input);
+            output = id;
         }
+        map.put(key, new Value<>(ValueType.STREAM, stream, -1L));
 
-        public ValueType getValueType() {
-            return type;
-        }
-
-        public V getValue() {
-            return value;
-        }
-
-        public Long getExpiry() {
-            return expiry;
-        }
-
-        @Override
-        public String toString() {
-            return "(" + type + ", " + value + ", " + expiry + ")";
-        }
-    }
-
-    public enum ValueType {
-        STRING,
-        LIST,
-        SET,
-        ZSET,
-        HASH,
-        STREAM,
-        VECTORSET,
-        DEFAULT
+        return RespResponseUtility.getBulkString(output);
     }
 }
