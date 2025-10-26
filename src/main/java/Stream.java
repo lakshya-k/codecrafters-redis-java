@@ -1,5 +1,8 @@
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class Stream {
     private final static String ERR = "ERR The ID specified in XADD is equal or smaller than the target stream top " +
@@ -110,5 +113,45 @@ public class Stream {
         }
 
         return milliSecondsTime + "-" + sequenceNumber;
+    }
+
+    // Returns true if id2 >= id1 else false
+    private static boolean compare(String id1, String id2) {
+        String milliSecondsTime1 = getMilliSecondsTime(id1);
+        String sequenceNumber1 = getSequenceNumber(id1);
+        String milliSecondsTime2 = getMilliSecondsTime(id2);
+        String sequenceNumber2 = getSequenceNumber(id2);
+
+        if (Long.parseLong(milliSecondsTime2) > Long.parseLong(milliSecondsTime1)) return true;
+        if (milliSecondsTime2.equals(milliSecondsTime1)) {
+            if (Long.parseLong(sequenceNumber2) >= Long.parseLong(sequenceNumber1)) return true;
+        }
+
+        return false;
+    }
+
+    public String xrange(String lowerLimit, String upperLimit) {
+        if (!lowerLimit.contains("-")) lowerLimit = lowerLimit + "-0";
+        if (!upperLimit.contains("-")) upperLimit = upperLimit + "-" + Long.MAX_VALUE;
+
+        StringBuilder res = new StringBuilder();
+        int count = 0;
+
+        for (Map.Entry<String, HashMap<String, String>> entry : linkedHashMap.entrySet()) {
+            if (compare(lowerLimit, entry.getKey()) && compare(entry.getKey(), upperLimit)) {
+                ++count;
+                List<String> keyValue = new ArrayList<>();
+                for (Map.Entry<String, String> e : entry.getValue().entrySet()) {
+                    keyValue.add(e.getKey());
+                    keyValue.add(e.getValue());
+                }
+                res.append("*2\r\n");
+                res.append(RespResponseUtility.getBulkString(entry.getKey()));
+                res.append(RespResponseUtility.getRespArray(keyValue));
+            }
+        }
+        res.insert(0, "*" + count + "\r\n");
+
+        return res.toString();
     }
 }

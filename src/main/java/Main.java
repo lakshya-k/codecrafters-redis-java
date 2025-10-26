@@ -75,6 +75,7 @@ public class Main {
             case "blpop" -> blpop(words);
             case "type" -> type(words);
             case "xadd" -> xadd(words);
+            case "xrange" -> xrange(words);
             default -> "";
         };
 
@@ -325,6 +326,22 @@ public class Main {
             output = stream.add(id, input);
         }
         map.put(key, new Value<>(ValueType.STREAM, stream, -1L));
+
+        return output;
+    }
+
+    public static String xrange(String[] words) {
+        String key = words[4];
+        String lowerLimit = words[6];
+        String upperLimit = words[8];
+        String output = "";
+
+        if (map.containsKey(key)) {
+            Stream stream = (Stream) map.get(key).getValue();
+            output = stream.xrange(lowerLimit, upperLimit);
+        } else {
+            output = RespResponseUtility.getRespArray(Collections.emptyList());
+        }
 
         return output;
     }
