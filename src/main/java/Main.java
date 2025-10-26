@@ -76,6 +76,7 @@ public class Main {
             case "type" -> type(words);
             case "xadd" -> xadd(words);
             case "xrange" -> xrange(words);
+            case "xread" -> xread(words);
             default -> "";
         };
 
@@ -331,8 +332,6 @@ public class Main {
     }
 
     public static String xrange(String[] words) {
-        System.out.println("Words: ");
-        for (String w : words) System.out.println(w);
         String key = words[4];
         String lowerLimit = "";
         String upperLimit = "";
@@ -346,6 +345,22 @@ public class Main {
         if (map.containsKey(key)) {
             Stream stream = (Stream) map.get(key).getValue();
             output = stream.xrange(lowerLimit, upperLimit);
+        } else {
+            output = RespResponseUtility.getRespArray(Collections.emptyList());
+        }
+
+        return output;
+    }
+
+    public static String xread(String[] words) {
+        String key = words[6];
+        String lowerLimit = words[8];
+        String output = "";
+
+        if (map.containsKey(key)) {
+            Stream stream = (Stream) map.get(key).getValue();
+            output = stream.xread(lowerLimit);
+            output = "*1\r\n*2\r\n" + RespResponseUtility.getBulkString(key) + output;
         } else {
             output = RespResponseUtility.getRespArray(Collections.emptyList());
         }

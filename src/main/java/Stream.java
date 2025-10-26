@@ -154,4 +154,12 @@ public class Stream {
 
         return res.toString();
     }
+
+    public String xread(String lowerLimit) {
+        if (!lowerLimit.contains("-")) lowerLimit = lowerLimit + "-0";
+        lowerLimit = getNextId(lowerLimit);
+        String upperLimit = Long.MAX_VALUE + "-" + Long.MAX_VALUE;
+
+        return xrange(lowerLimit, upperLimit);
+    }
 }
