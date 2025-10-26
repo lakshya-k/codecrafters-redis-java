@@ -321,8 +321,8 @@ public class Main {
             stream = (Stream) map.get(key).getValue();
             output = stream.add(id, input);
         } else {
-            stream = new Stream(id, input);
-            output = RespResponseUtility.getBulkString(id);
+            stream = new Stream();
+            output = stream.add(id, input);
         }
         map.put(key, new Value<>(ValueType.STREAM, stream, -1L));
 
