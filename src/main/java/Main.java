@@ -322,10 +322,10 @@ public class Main {
             output = stream.add(id, input);
         } else {
             stream = new Stream(id, input);
-            output = id;
+            output = RespResponseUtility.getBulkString(id);
         }
         map.put(key, new Value<>(ValueType.STREAM, stream, -1L));
 
-        return RespResponseUtility.getBulkString(output);
+        return output;
     }
 }
