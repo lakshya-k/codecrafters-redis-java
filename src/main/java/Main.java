@@ -353,17 +353,30 @@ public class Main {
     }
 
     public static String xread(String[] words) {
-        String key = words[6];
-        String lowerLimit = words[8];
+        List<String> keyRange = new ArrayList<>();
+        for (int i = 6; i < words.length - 1; i += 2) {
+            keyRange.add(words[i]);
+        }
+
+        List<String> keys = new ArrayList<>(keyRange.subList(0, keyRange.size()/2));
+        List<String> range = new ArrayList<>(keyRange.subList(keyRange.size()/2, keyRange.size()));
         String output = "";
 
-        if (map.containsKey(key)) {
-            Stream stream = (Stream) map.get(key).getValue();
-            output = stream.xread(lowerLimit);
-            output = "*1\r\n*2\r\n" + RespResponseUtility.getBulkString(key) + output;
-        } else {
-            output = RespResponseUtility.getRespArray(Collections.emptyList());
+        for (int i = 0; i < keys.size(); ++i) {
+            String key = keys.get(i);
+            String lowerLimit = range.get(i);
+
+            if (map.containsKey(key)) {
+                Stream stream = (Stream) map.get(key).getValue();
+                String curr = stream.xread(lowerLimit);
+                output += "*2\r\n" + RespResponseUtility.getBulkString(key) + curr;
+            } else {
+                String curr = RespResponseUtility.getRespArray(Collections.emptyList());
+                output += "*2\r\n" + RespResponseUtility.getBulkString(key) + curr;
+            }
         }
+
+        output = "*" + keys.size() + "\r\n" + output;
 
         return output;
     }
