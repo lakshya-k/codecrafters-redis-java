@@ -24,12 +24,14 @@ public class Stream {
     }
 
     public static String getMilliSecondsTime(String id) {
+        if (id.equals("*")) return id;
         String[] strings = id.split("-");
 
         return strings[0];
     }
 
     public static String getSequenceNumber(String id) {
+        if (id.equals("*")) return id;
         String[] strings = id.split("-");
 
         return strings[1];
