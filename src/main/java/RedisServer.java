@@ -82,6 +82,7 @@ public class RedisServer {
                 case "xadd" -> xadd(words);
                 case "xrange" -> xrange(words);
                 case "xread" -> xread(words);
+                case "incr" -> incr(words);
                 default -> "";
             };
         }
@@ -459,5 +460,23 @@ public class RedisServer {
         }
 
         return count;
+    }
+
+    private String incr(String[] words) {
+        String key = words[4];
+        String output = "";
+
+        synchronized (this) {
+            if (map.containsKey(key)) {
+                String value = (String) map.get(key).getValue();
+                int v = Integer.parseInt(value);
+                map.put(key, new Value<>(ValueType.STRING, String.valueOf(v + 1), -1L));
+                output = RespResponseUtility.getRespInteger(v + 1);
+            } else {
+
+            }
+        }
+
+        return output;
     }
 }
