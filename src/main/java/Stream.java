@@ -115,6 +115,20 @@ public class Stream {
         return milliSecondsTime + "-" + sequenceNumber;
     }
 
+    private String getNextBiggerId(String id) {
+        String milliSecondsTime = getMilliSecondsTime(id);
+        String sequenceNumber = getSequenceNumber(id);
+
+        if (Long.parseLong(sequenceNumber) == Long.MAX_VALUE) {
+            milliSecondsTime = String.valueOf(Long.parseLong(milliSecondsTime) + 1);
+            sequenceNumber = "";
+        } else {
+            sequenceNumber = String.valueOf(Long.parseLong(sequenceNumber) + 1);
+        }
+
+        return milliSecondsTime + "-" + sequenceNumber;
+    }
+
     // Returns true if id2 >= id1 else false
     private static boolean compare(String id1, String id2) {
         String milliSecondsTime1 = getMilliSecondsTime(id1);
@@ -157,7 +171,7 @@ public class Stream {
 
     public String xread(String lowerLimit) {
         if (!lowerLimit.contains("-")) lowerLimit = lowerLimit + "-0";
-        lowerLimit = getNextId(lowerLimit);
+        lowerLimit = getNextBiggerId(lowerLimit);
         String upperLimit = Long.MAX_VALUE + "-" + Long.MAX_VALUE;
 
         return xrange(lowerLimit, upperLimit);
