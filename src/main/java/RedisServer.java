@@ -473,7 +473,8 @@ public class RedisServer {
                 map.put(key, new Value<>(ValueType.STRING, String.valueOf(v + 1), -1L));
                 output = RespResponseUtility.getRespInteger(v + 1);
             } else {
-
+                map.put(key, new Value<>(ValueType.STRING, String.valueOf(1), -1L));
+                output = RespResponseUtility.getRespInteger(1);
             }
         }
 
