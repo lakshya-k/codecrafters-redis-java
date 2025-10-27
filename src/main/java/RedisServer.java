@@ -386,7 +386,7 @@ public class RedisServer {
                         count++;
                         lastIndex += "*".length(); // Move past the found substring to find the next one
                     }
-                    if (count > 4) break;
+                    if (count > 3) break;
 
                     this.wait(remainingTime);
                     remainingTime = Math.max(0, beforeTimeInMillis + remainingTime - System.currentTimeMillis());
@@ -395,8 +395,15 @@ public class RedisServer {
             } else if (timeout == 0){
                 while(true) {
                     output = xreadUtility(keys, range);
-                    if (!output.isEmpty()) break;
-                    this.wait(timeout);
+                    int count = 0;
+                    int lastIndex = 0;
+
+                    while ((lastIndex = output.indexOf("*", lastIndex)) != -1) {
+                        count++;
+                        lastIndex += "*".length(); // Move past the found substring to find the next one
+                    }
+                    if (count > 3) break;
+                    this.wait();
                 }
             } else {
                 output = xreadUtility(keys, range);

@@ -67,6 +67,7 @@ public class Stream {
         return true;
     }
 
+    // Used to auto-generate ID
     private String getNextId(String id) {
         String milliSecondsTime = getMilliSecondsTime(id);
         String sequenceNumber = getSequenceNumber(id);
@@ -115,6 +116,7 @@ public class Stream {
         return milliSecondsTime + "-" + sequenceNumber;
     }
 
+    // Used to get next bigger ID for xread
     private String getNextBiggerId(String id) {
         String milliSecondsTime = getMilliSecondsTime(id);
         String sequenceNumber = getSequenceNumber(id);
