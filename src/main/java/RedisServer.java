@@ -17,7 +17,7 @@ public class RedisServer {
 
     public void start() {
         // You can use print statements as follows for debugging, they'll be visible when running tests.
-        System.out.println("Logs from your program will appear here!");
+        //System.out.println("Logs from your program will appear here!");
 
         //  Uncomment the code below to pass the first stage
         ServerSocket serverSocket = null;
@@ -65,23 +65,26 @@ public class RedisServer {
 
     private String parseCommand(String input) throws InterruptedException {
         String[] words = input.split("\r\n");
-        String output = switch (words[2].toLowerCase()) {
-            case "ping" -> ping();
-            case "echo" -> echo(words);
-            case "set" -> set(words);
-            case "get" -> get(words);
-            case "rpush" -> rpush(words);
-            case "lrange" -> lrange(words);
-            case "lpush" -> lpush(words);
-            case "llen" -> llen(words);
-            case "lpop" -> lpop(words);
-            case "blpop" -> blpop(words);
-            case "type" -> type(words);
-            case "xadd" -> xadd(words);
-            case "xrange" -> xrange(words);
-            case "xread" -> xread(words);
-            default -> "";
-        };
+        String output = "";
+        if (words.length > 2) {
+             output = switch (words[2].toLowerCase()) {
+                case "ping" -> ping();
+                case "echo" -> echo(words);
+                case "set" -> set(words);
+                case "get" -> get(words);
+                case "rpush" -> rpush(words);
+                case "lrange" -> lrange(words);
+                case "lpush" -> lpush(words);
+                case "llen" -> llen(words);
+                case "lpop" -> lpop(words);
+                case "blpop" -> blpop(words);
+                case "type" -> type(words);
+                case "xadd" -> xadd(words);
+                case "xrange" -> xrange(words);
+                case "xread" -> xread(words);
+                default -> "";
+            };
+        }
 
         return output;
     }
