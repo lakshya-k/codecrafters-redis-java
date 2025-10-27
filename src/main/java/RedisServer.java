@@ -5,11 +5,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 public class RedisServer {
     // In-memory hashmap to store key:value,expiration
-    static HashMap<String, Value<?>> map;
+    private static HashMap<String, Value<?>> map;
+    // List of commands in multi-exec
+    private static LinkedHashMap<String, String[]> commands;
 
     public RedisServer() {
         map = new HashMap<>();
@@ -83,6 +86,7 @@ public class RedisServer {
                 case "xrange" -> xrange(words);
                 case "xread" -> xread(words);
                 case "incr" -> incr(words);
+                case "multi" -> multi(words);
                 default -> "";
             };
         }
@@ -483,5 +487,9 @@ public class RedisServer {
         }
 
         return output;
+    }
+
+    private String multi(String[] words) {
+        return RespResponseUtility.getSimpleString("OK");
     }
 }
