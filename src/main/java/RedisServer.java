@@ -366,11 +366,32 @@ public class RedisServer {
         List<String> keyRange = new ArrayList<>();
 
         for (int j = block ? 10 : 6; j < words.length - 1; j += 2) {
-            keyRange.add(words[j]);
+            if (keyRange.equals("$")) {
+
+            } else {
+                keyRange.add(words[j]);
+            }
         }
 
         List<String> keys = new ArrayList<>(keyRange.subList(0, keyRange.size()/2));
         List<String> range = new ArrayList<>(keyRange.subList(keyRange.size()/2, keyRange.size()));
+        List<String> updatedRange = new ArrayList<>();
+
+        for (int i = 0; i < keys.size(); ++i) {
+            if (range.get(i).equals("$")) {
+                if (map.containsKey(keys.get(i))) {
+                    Stream stream = (Stream) map.get(keys.get(i)).getValue();
+                    updatedRange.add(stream.getLastId());
+                } else {
+                    updatedRange.add("0-0");
+                }
+            } else {
+                updatedRange.add(range.get(i));
+            }
+        }
+
+        range = updatedRange;
+
         String output = "";
 
         synchronized (this) {
@@ -379,14 +400,7 @@ public class RedisServer {
                 long remainingTime = timeout;
                 output = xreadUtility(keys, range);
                 while(remainingTime > 0) {
-                    int count = 0;
-                    int lastIndex = 0;
-
-                    while ((lastIndex = output.indexOf("*", lastIndex)) != -1) {
-                        count++;
-                        lastIndex += "*".length(); // Move past the found substring to find the next one
-                    }
-                    if (count > 3) break;
+                    if (subStringCount(output, "*") > 3) break;
 
                     this.wait(remainingTime);
                     remainingTime = Math.max(0, beforeTimeInMillis + remainingTime - System.currentTimeMillis());
@@ -395,14 +409,7 @@ public class RedisServer {
             } else if (timeout == 0){
                 while(true) {
                     output = xreadUtility(keys, range);
-                    int count = 0;
-                    int lastIndex = 0;
-
-                    while ((lastIndex = output.indexOf("*", lastIndex)) != -1) {
-                        count++;
-                        lastIndex += "*".length(); // Move past the found substring to find the next one
-                    }
-                    if (count > 3) break;
+                    if (subStringCount(output, "*") > 3) break;
                     this.wait();
                 }
             } else {
@@ -410,15 +417,7 @@ public class RedisServer {
             }
         }
 
-        int count = 0;
-        int lastIndex = 0;
-
-        while ((lastIndex = output.indexOf("*", lastIndex)) != -1) {
-            count++;
-            lastIndex += "*".length(); // Move past the found substring to find the next one
-        }
-
-        if (count > 3) {
+        if (subStringCount(output, "*") > 3) {
             output = "*" + keys.size() + "\r\n" + output;
         } else {
             output = RespResponseUtility.getNullArray();
@@ -445,5 +444,17 @@ public class RedisServer {
         }
 
         return output;
+    }
+
+    public static int subStringCount(String str, String substr) {
+        int count = 0;
+        int lastIndex = 0;
+
+        while ((lastIndex = str.indexOf(substr, lastIndex)) != -1) {
+            count++;
+            lastIndex += substr.length(); // Move past the found substring to find the next one
+        }
+
+        return count;
     }
 }

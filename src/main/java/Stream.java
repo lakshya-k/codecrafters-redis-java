@@ -131,6 +131,15 @@ public class Stream {
         return milliSecondsTime + "-" + sequenceNumber;
     }
 
+    public String getLastId() {
+        String[] lKeys = linkedHashMap.keySet().toArray(new String[0]);
+        if (lKeys.length > 0) {
+            return lKeys[lKeys.length - 1];
+        } else {
+            return "0-0";
+        }
+    }
+
     // Returns true if id2 >= id1 else false
     private static boolean compare(String id1, String id2) {
         String milliSecondsTime1 = getMilliSecondsTime(id1);
