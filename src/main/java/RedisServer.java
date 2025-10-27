@@ -469,9 +469,13 @@ public class RedisServer {
         synchronized (this) {
             if (map.containsKey(key)) {
                 String value = (String) map.get(key).getValue();
-                int v = Integer.parseInt(value);
-                map.put(key, new Value<>(ValueType.STRING, String.valueOf(v + 1), -1L));
-                output = RespResponseUtility.getRespInteger(v + 1);
+                try {
+                    int v = Integer.parseInt(value);
+                    map.put(key, new Value<>(ValueType.STRING, String.valueOf(v + 1), -1L));
+                    output = RespResponseUtility.getRespInteger(v + 1);
+                } catch (Exception e) {
+                    output = RespResponseUtility.getErrorMessage("ERR value is not an integer or out of range");
+                }
             } else {
                 map.put(key, new Value<>(ValueType.STRING, String.valueOf(1), -1L));
                 output = RespResponseUtility.getRespInteger(1);
