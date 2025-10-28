@@ -11,8 +11,14 @@ import java.util.concurrent.CompletableFuture;
 public class RedisServer {
     // In-memory hashmap to store key:value,expiration
     private static HashMap<String, Value<?>> map;
+    private int port = 6379;
 
     public RedisServer() {
+        map = new HashMap<>();
+    }
+
+    public RedisServer(int port) {
+        this.port = port;
         map = new HashMap<>();
     }
 
@@ -22,7 +28,7 @@ public class RedisServer {
 
         //  Uncomment the code below to pass the first stage
         ServerSocket serverSocket = null;
-        int port = 6379;
+        //int port = 6379;
         try {
             serverSocket = new ServerSocket(port);
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
@@ -121,11 +127,13 @@ public class RedisServer {
         List<String> outputs = new ArrayList<>();
         List<String> operations = new ArrayList<>();
 
-        for (String[] enqueuedCommand : client.getEnqueuedCommands()) {
-            String[] args = enqueuedCommand;
-            operations.add(enqueuedCommand[2].toLowerCase());
-            String output = parseCommand(args, false);
-            outputs.add(output);
+        synchronized (this) {
+            for (String[] enqueuedCommand : client.getEnqueuedCommands()) {
+                String[] args = enqueuedCommand;
+                operations.add(enqueuedCommand[2].toLowerCase());
+                String output = parseCommand(args, false);
+                outputs.add(output);
+            }
         }
         client.endTransaction();
 
