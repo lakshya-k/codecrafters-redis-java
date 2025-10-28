@@ -23,7 +23,7 @@ public class Stream {
         if (linkedHashMap.containsKey(id)) existingMap = linkedHashMap.get(id);
         existingMap.putAll(input);
         linkedHashMap.put(id, existingMap);
-        return RespResponseUtility.getBulkString(id);
+        return id;
     }
 
     public static String getMilliSecondsTime(String id) {

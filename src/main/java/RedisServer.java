@@ -4,18 +4,13 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class RedisServer {
     // In-memory hashmap to store key:value,expiration
     private static HashMap<String, Value<?>> map;
-    // List of commands in multi-exec
-    private static LinkedHashMap<String, String[]> commands;
 
     public RedisServer() {
         map = new HashMap<>();
@@ -111,10 +106,10 @@ public class RedisServer {
                 }
                 default: {
                     if (client.isInTransaction()) {
-                        client.enqueueCommand(command, args);
+                        client.enqueueCommand(args);
                         result = RespResponseUtility.getSimpleString("QUEUED");
                     } else {
-                        result =  parseCommand(command, args);
+                        result =  parseCommand(args, true);
                     }
                 }
             }
@@ -123,49 +118,55 @@ public class RedisServer {
     }
 
     private String processEnqueuedCommands(Client client) throws InterruptedException {
-        LinkedHashMap<String, String[]> enqueuedCommands = client.getEnqueuedCommands();
-        client.endTransaction();
         List<String> outputs = new ArrayList<>();
+        List<String> operations = new ArrayList<>();
 
-        for (Map.Entry<String, String[]> enqueuedCommand : enqueuedCommands.entrySet()) {
-            String command = enqueuedCommand.getKey();
-            String[] args = enqueuedCommand.getValue();
-
-            outputs.add(parseCommand(command, args));
+        for (String[] enqueuedCommand : client.getEnqueuedCommands()) {
+            String[] args = enqueuedCommand;
+            operations.add(enqueuedCommand[2].toLowerCase());
+            String output = parseCommand(args, false);
+            outputs.add(output);
         }
+        client.endTransaction();
 
-        return RespResponseUtility.getRespArray(outputs);
+        return RespResponseUtility.getRespArray(operations, outputs);
     }
 
-    private String parseCommand(String command, String[] args) throws InterruptedException {
-        String output = switch (command) {
-            case "ping" -> ping();
-            case "echo" -> echo(args);
-            case "set" -> set(args);
-            case "get" -> get(args);
-            case "rpush" -> rpush(args);
-            case "lrange" -> lrange(args);
-            case "lpush" -> lpush(args);
-            case "llen" -> llen(args);
-            case "lpop" -> lpop(args);
-            case "blpop" -> blpop(args);
-            case "type" -> type(args);
-            case "xadd" -> xadd(args);
-            case "xrange" -> xrange(args);
-            case "xread" -> xread(args);
-            case "incr" -> incr(args);
-            default -> "";
-        };
+    private String parseCommand(String[] args, boolean format) throws InterruptedException {
+        String command = "";
+        String output = "";
+        if (args.length > 2) {
+            command = args[2].toLowerCase();
 
+            output = switch (command) {
+                case "ping" -> ping();
+                case "echo" -> echo(args);
+                case "set" -> set(args);
+                case "get" -> get(args);
+                case "rpush" -> rpush(args);
+                case "lrange" -> lrange(args);
+                case "lpush" -> lpush(args);
+                case "llen" -> llen(args);
+                case "lpop" -> lpop(args);
+                case "blpop" -> blpop(args);
+                case "type" -> type(args);
+                case "xadd" -> xadd(args);
+                case "xrange" -> xrange(args);
+                case "xread" -> xread(args);
+                case "incr" -> incr(args);
+                default -> "";
+            };
+        }
+        if (format) output = RespResponseUtility.getRespOutput(command, output);
         return output;
     }
 
     private static String ping() {
-        return RespResponseUtility.getSimpleString("PONG");
+        return "PONG";
     }
 
     private static String echo(String[] words) {
-        return RespResponseUtility.getBulkString(words[4]);
+        return words[4];
     }
 
     private String set(String[] words) {
@@ -186,7 +187,7 @@ public class RedisServer {
             map.put(key, value);
         }
 
-        return RespResponseUtility.getSimpleString("OK");
+        return "OK";
     }
 
     private String get(String[] words) {
@@ -202,8 +203,7 @@ public class RedisServer {
                 }
             }
         }
-
-        return RespResponseUtility.getBulkString(output);
+        return output;
     }
 
     private String rpush(String[] words) {
@@ -218,7 +218,7 @@ public class RedisServer {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     values = (List<String>) map.get(key).getValue();
                 } else {
-                    return RespResponseUtility.getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("ERR Value is not a list");
                 }
             }
             values.addAll(elements);
@@ -226,7 +226,7 @@ public class RedisServer {
             map.put(key, new Value<>(ValueType.LIST, values, -1L));
             this.notifyAll();
         }
-        return RespResponseUtility.getRespInteger(values.size());
+        return String.valueOf(values.size());
     }
 
     private String lrange(String[] words) {
@@ -242,7 +242,7 @@ public class RedisServer {
                     r = RespResponseUtility.normalizeIndex(r, elements.size());
                     output = RespResponseUtility.getRespArray(elements.subList(l, Math.min(r + 1, elements.size())));
                 } else {
-                    output = RespResponseUtility.getErrorMessage("Value is not list");
+                    output = RespResponseUtility.getErrorMessage("ERR Value is not list");
                 }
             } else {
                 output = RespResponseUtility.getRespArray(Collections.emptyList());
@@ -265,7 +265,7 @@ public class RedisServer {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     values = (List<String>) map.get(key).getValue();
                 } else {
-                    return RespResponseUtility.getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("ERR Value is not a list");
                 }
             }
             values.addAll(0, elements);
@@ -274,7 +274,7 @@ public class RedisServer {
             this.notifyAll();
         }
 
-        return RespResponseUtility.getRespInteger(values.size());
+        return String.valueOf(values.size());
     }
 
     private String llen(String[] words) {
@@ -286,12 +286,12 @@ public class RedisServer {
                     List<String> values = (List<String>) map.get(key).getValue();
                     res = values.size();
                 } else {
-                    return RespResponseUtility.getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("ERR Value is not a list");
                 }
             }
         }
 
-        return RespResponseUtility.getRespInteger(res);
+        return String.valueOf(res);
     }
 
     private String lpop(String[] words) {
@@ -312,12 +312,12 @@ public class RedisServer {
 
                     map.put(key, new Value<>(ValueType.LIST, values, -1L));
                 } else {
-                    return RespResponseUtility.getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("ERR Value is not a list");
                 }
             }
         }
 
-        return cnt == 1 ? RespResponseUtility.getBulkString(res.get(0)) : RespResponseUtility.getRespArray(res);
+        return cnt == 1 ? res.get(0) : RespResponseUtility.getRespArray(res);
     }
 
     private String blpop(String[] words) throws InterruptedException {
@@ -367,7 +367,7 @@ public class RedisServer {
                         return RespResponseUtility.getRespArray(Collections.emptyList());
                     }
                 } else {
-                    return RespResponseUtility.getErrorMessage("Value is not a list");
+                    return RespResponseUtility.getErrorMessage("ERR Value is not a list");
                 }
             } else {
                 return RespResponseUtility.getNullArray();
@@ -385,7 +385,7 @@ public class RedisServer {
                 res = map.get(key).getValueType().toString().toLowerCase();
             }
         }
-        return RespResponseUtility.getSimpleString(res);
+        return res;
     }
 
     private String xadd(String[] words) {
@@ -542,24 +542,16 @@ public class RedisServer {
                 try {
                     int v = Integer.parseInt(value);
                     map.put(key, new Value<>(ValueType.STRING, String.valueOf(v + 1), -1L));
-                    output = RespResponseUtility.getRespInteger(v + 1);
+                    output = String.valueOf(v + 1);
                 } catch (Exception e) {
                     output = RespResponseUtility.getErrorMessage("ERR value is not an integer or out of range");
                 }
             } else {
                 map.put(key, new Value<>(ValueType.STRING, String.valueOf(1), -1L));
-                output = RespResponseUtility.getRespInteger(1);
+                output = String.valueOf(1);
             }
         }
 
         return output;
     }
-
-//    private String multi(String[] words) {
-//        return RespResponseUtility.getSimpleString("OK");
-//    }
-//
-//    private String exec(String[] words) {
-//        return RespResponseUtility.getErrorMessage("ERR EXEC without MULTI");
-//    }
 }

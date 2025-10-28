@@ -2,7 +2,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 public class Client {
     private int id;
@@ -10,14 +12,14 @@ public class Client {
     private InputStream inputStream;
     private OutputStream outputStream;
     private boolean inTransaction;
-    private LinkedHashMap<String, String[]> enqueuedCommands;
+    private List<String[]> enqueuedCommands;
 
     public Client(int id, Socket socket, InputStream inputStream, OutputStream outputStream) {
         this.id = id;
         this.socket = socket;
         this.inputStream = inputStream;
         this.outputStream = outputStream;
-        enqueuedCommands = new LinkedHashMap<>();
+        enqueuedCommands = new ArrayList<>();
         inTransaction = false;
     }
 
@@ -67,12 +69,12 @@ public class Client {
         return this.inTransaction;
     }
 
-    public LinkedHashMap<String, String[]> getEnqueuedCommands() {
+    public List<String[]> getEnqueuedCommands() {
         return this.enqueuedCommands;
     }
 
-    public boolean enqueueCommand(String command, String[] args) {
-        enqueuedCommands.put(command, args);
+    public boolean enqueueCommand(String[] args) {
+        enqueuedCommands.add(args);
         return true;
     }
 }
