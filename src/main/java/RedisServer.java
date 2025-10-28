@@ -14,19 +14,22 @@ public class RedisServer {
     // In-memory hashmap to store key:value,expiration
     private HashMap<String, Value<?>> map;
     private int clientCount;
-    private int port = 6379;
+    private int port;
+    private String replicaOf;
 
     public RedisServer(UUID id) {
         this.id = id;
         clientCount = 0;
         map = new HashMap<>();
+        port = 6379;
     }
 
-    public RedisServer(UUID id, int port) {
-        this.id = id;
+    public void setPort(int port) {
         this.port = port;
-        clientCount = 0;
-        map = new HashMap<>();
+    }
+
+    public void setReplicaOf(String replicaOf) {
+        this.replicaOf = replicaOf;
     }
 
     public void start() {
@@ -35,7 +38,6 @@ public class RedisServer {
 
         //  Uncomment the code below to pass the first stage
         ServerSocket serverSocket = null;
-        //int port = 6379;
         try {
             serverSocket = new ServerSocket(port);
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
@@ -574,13 +576,13 @@ public class RedisServer {
     }
 
     private String info(String[] args) {
-        System.out.println("Args: ");
         for (String a : args) System.out.println(a);
         StringBuilder output = new StringBuilder("# Server\r\n");
         output.append("redis_version:7.2.4\r\n");
         output.append("# Client\r\n");
         output.append("connected_clients:" + clientCount + "\r\n");
-        output.append("# Replication\r\nrole:master\r\n");
+        if (replicaOf == null) output.append("# Replication\r\nrole:master\r\n");
+        else output.append("# Replication\r\nrole:slave\r\n");
 
         return RespResponseUtility.getBulkString(output.toString());
     }
