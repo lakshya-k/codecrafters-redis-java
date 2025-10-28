@@ -16,6 +16,8 @@ public class RedisServer {
     private int clientCount;
     private int port;
     private String replicaOf;
+    private String replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+    private long offset = 0;
 
     public RedisServer(UUID id) {
         this.id = id;
@@ -581,8 +583,13 @@ public class RedisServer {
         output.append("redis_version:7.2.4\r\n");
         output.append("# Client\r\n");
         output.append("connected_clients:" + clientCount + "\r\n");
-        if (replicaOf == null) output.append("# Replication\r\nrole:master\r\n");
+        if (replicaOf == null) {
+            output.append("# Replication\r\nrole:master\r\n");
+            output.append("master_replid:" + replicationId + "\r\n");
+            output.append("master_repl_offset:" + offset + "\r\n");
+        }
         else output.append("# Replication\r\nrole:slave\r\n");
+
 
         return RespResponseUtility.getBulkString(output.toString());
     }
