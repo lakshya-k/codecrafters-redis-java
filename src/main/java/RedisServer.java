@@ -4,9 +4,12 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 public class RedisServer {
     // In-memory hashmap to store key:value,expiration
@@ -30,35 +33,27 @@ public class RedisServer {
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
             // ensures that we don't run into 'Address already in use' errors
             serverSocket.setReuseAddress(true);
+            int id = 0;
 
             while (true) {
                 // Wait for connection from client.
                 Socket clientSocket = serverSocket.accept();
+                ++id;
+                Socket assignedSocket = clientSocket;
 
-                Runnable task = () -> {
+                Client client = new Client(id, assignedSocket, assignedSocket.getInputStream(),
+                        assignedSocket.getOutputStream());
+
+                CompletableFuture.runAsync(() -> {
                     try {
-                        while (true) {
-                            byte[] input = new byte[1024];
-                            clientSocket.getInputStream().read(input);
-                            String output = parseCommand(new String(input));
-                            clientSocket.getOutputStream().write(output.getBytes());
-                        }
+                        handleClient(client);
                     } catch (IOException e) {
-                        System.out.println("IOException: " + e.getMessage());
+                        throw new RuntimeException(e);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
-                    } finally {
-                        try {
-                            if (clientSocket != null) {
-                                clientSocket.close();
-                            }
-                        } catch (IOException e) {
-                            System.out.println("IOException: " + e.getMessage());
-                        }
                     }
-                };
-                Thread thread = new Thread(task);
-                thread.start();
+                });
+
             }
 
         } catch (IOException e) {
@@ -66,31 +61,101 @@ public class RedisServer {
         }
     }
 
-    private String parseCommand(String input) throws InterruptedException {
-        String[] words = input.split("\r\n");
-        String output = "";
-        if (words.length > 2) {
-             output = switch (words[2].toLowerCase()) {
-                case "ping" -> ping();
-                case "echo" -> echo(words);
-                case "set" -> set(words);
-                case "get" -> get(words);
-                case "rpush" -> rpush(words);
-                case "lrange" -> lrange(words);
-                case "lpush" -> lpush(words);
-                case "llen" -> llen(words);
-                case "lpop" -> lpop(words);
-                case "blpop" -> blpop(words);
-                case "type" -> type(words);
-                case "xadd" -> xadd(words);
-                case "xrange" -> xrange(words);
-                case "xread" -> xread(words);
-                case "incr" -> incr(words);
-                case "multi" -> multi(words);
-                case "exec" -> exec(words);
-                default -> "";
-            };
+    private void handleClient(Client client) throws IOException, InterruptedException {
+        try {
+            while (true) {
+                String input = client.read();
+                String output = processInput(input, client);
+                client.send(output);
+            }
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            client.closeSocket();
         }
+    }
+
+    private String processInput(String input, Client client) throws InterruptedException {
+        String result = "";
+        String[] args = input.split("\r\n");
+        if (args.length > 2) {
+            String command = args[2].toLowerCase();
+            switch(command) {
+                case "multi": {
+                    if (client.isInTransaction()) {
+                        result = RespResponseUtility.getErrorMessage("ERR nested transactions not allowed");
+                    } else {
+                        client.beginTransaction();
+                        result = RespResponseUtility.getSimpleString("OK");
+                    }
+                    break;
+                }
+                case "discard": {
+                    if (client.isInTransaction()) {
+                        client.endTransaction();
+                        result = RespResponseUtility.getSimpleString("OK");
+                    } else {
+                        result = RespResponseUtility.getErrorMessage("ERR DISCARD without MULTI");
+                    }
+                    break;
+                }
+                case "exec": {
+                    if (client.isInTransaction()) {
+                        result = processEnqueuedCommands(client);
+                    } else {
+                        result = RespResponseUtility.getErrorMessage("ERR EXEC without MULTI");
+                    }
+                    break;
+                }
+                default: {
+                    if (client.isInTransaction()) {
+                        client.enqueueCommand(command, args);
+                        result = RespResponseUtility.getSimpleString("QUEUED");
+                    } else {
+                        result =  parseCommand(command, args);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private String processEnqueuedCommands(Client client) throws InterruptedException {
+        LinkedHashMap<String, String[]> enqueuedCommands = client.getEnqueuedCommands();
+        client.endTransaction();
+        List<String> outputs = new ArrayList<>();
+
+        for (Map.Entry<String, String[]> enqueuedCommand : enqueuedCommands.entrySet()) {
+            String command = enqueuedCommand.getKey();
+            String[] args = enqueuedCommand.getValue();
+
+            outputs.add(parseCommand(command, args));
+        }
+
+        return RespResponseUtility.getRespArray(outputs);
+    }
+
+    private String parseCommand(String command, String[] args) throws InterruptedException {
+        String output = switch (command) {
+            case "ping" -> ping();
+            case "echo" -> echo(args);
+            case "set" -> set(args);
+            case "get" -> get(args);
+            case "rpush" -> rpush(args);
+            case "lrange" -> lrange(args);
+            case "lpush" -> lpush(args);
+            case "llen" -> llen(args);
+            case "lpop" -> lpop(args);
+            case "blpop" -> blpop(args);
+            case "type" -> type(args);
+            case "xadd" -> xadd(args);
+            case "xrange" -> xrange(args);
+            case "xread" -> xread(args);
+            case "incr" -> incr(args);
+            default -> "";
+        };
 
         return output;
     }
@@ -490,11 +555,11 @@ public class RedisServer {
         return output;
     }
 
-    private String multi(String[] words) {
-        return RespResponseUtility.getSimpleString("OK");
-    }
-
-    private String exec(String[] words) {
-        return RespResponseUtility.getErrorMessage("ERR EXEC without MULTI");
-    }
+//    private String multi(String[] words) {
+//        return RespResponseUtility.getSimpleString("OK");
+//    }
+//
+//    private String exec(String[] words) {
+//        return RespResponseUtility.getErrorMessage("ERR EXEC without MULTI");
+//    }
 }
