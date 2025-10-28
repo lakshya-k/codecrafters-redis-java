@@ -6,19 +6,26 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class RedisServer {
+    private final UUID id;
     // In-memory hashmap to store key:value,expiration
-    private static HashMap<String, Value<?>> map;
+    private HashMap<String, Value<?>> map;
+    private int clientCount;
     private int port = 6379;
 
-    public RedisServer() {
+    public RedisServer(UUID id) {
+        this.id = id;
+        clientCount = 0;
         map = new HashMap<>();
     }
 
-    public RedisServer(int port) {
+    public RedisServer(UUID id, int port) {
+        this.id = id;
         this.port = port;
+        clientCount = 0;
         map = new HashMap<>();
     }
 
@@ -39,6 +46,7 @@ public class RedisServer {
             while (true) {
                 // Wait for connection from client.
                 Socket clientSocket = serverSocket.accept();
+                ++clientCount;
                 ++id;
                 Socket assignedSocket = clientSocket;
 
@@ -74,6 +82,7 @@ public class RedisServer {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         } finally {
+            --clientCount;
             client.closeSocket();
         }
     }
@@ -162,6 +171,7 @@ public class RedisServer {
                 case "xrange" -> xrange(args);
                 case "xread" -> xread(args);
                 case "incr" -> incr(args);
+                case "info" -> info(args);
                 default -> "";
             };
         }
@@ -561,5 +571,17 @@ public class RedisServer {
         }
 
         return output;
+    }
+
+    private String info(String[] args) {
+        System.out.println("Args: ");
+        for (String a : args) System.out.println(a);
+        StringBuilder output = new StringBuilder("# Server\r\n");
+        output.append("redis_version:7.2.4\r\n");
+        output.append("# Client\r\n");
+        output.append("connected_clients:" + clientCount + "\r\n");
+        output.append("# Replication\r\nrole:master\r\n");
+
+        return RespResponseUtility.getBulkString(output.toString());
     }
 }

@@ -68,7 +68,6 @@ public final class RespResponseUtility {
             }
         }
 
-
         return output;
     }
 }
