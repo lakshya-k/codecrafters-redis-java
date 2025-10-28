@@ -87,6 +87,7 @@ public class RedisServer {
                 case "xread" -> xread(words);
                 case "incr" -> incr(words);
                 case "multi" -> multi(words);
+                case "exec" -> exec(words);
                 default -> "";
             };
         }
@@ -491,5 +492,9 @@ public class RedisServer {
 
     private String multi(String[] words) {
         return RespResponseUtility.getSimpleString("OK");
+    }
+
+    private String exec(String[] words) {
+        return RespResponseUtility.getErrorMessage("ERR EXEC without MULTI");
     }
 }
