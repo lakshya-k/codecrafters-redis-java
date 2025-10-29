@@ -91,6 +91,22 @@ public class RedisServer {
         OutputStream outputStream = clientSocket.getOutputStream();
 
         outputStream.write(RespResponseUtility.getRespArray(Collections.singletonList("PING")).getBytes());
+        inFromServer.readLine();
+
+        List<String> replconf = new ArrayList<>();
+        replconf.add("REPLCONF");
+        replconf.add("listening-port");
+        replconf.add(String.valueOf(this.port));
+
+        outputStream.write(RespResponseUtility.getRespArray(replconf).getBytes());
+        inFromServer.readLine();
+
+        List<String> capa = new ArrayList<>();
+        capa.add("REPLCONF");
+        capa.add("capa");
+        capa.add("psync2");
+
+        outputStream.write(RespResponseUtility.getRespArray(capa).getBytes());
 
         clientSocket.close();
         inFromServer.close();
@@ -198,6 +214,7 @@ public class RedisServer {
                 case "xread" -> xread(args);
                 case "incr" -> incr(args);
                 case "info" -> info(args);
+                case "replconf" -> replconf(args);
                 default -> "";
             };
         }
@@ -600,7 +617,6 @@ public class RedisServer {
     }
 
     private String info(String[] args) {
-        for (String a : args) System.out.println(a);
         StringBuilder output = new StringBuilder("# Server\r\n");
         output.append("redis_version:7.2.4\r\n");
         output.append("# Client\r\n");
@@ -612,7 +628,10 @@ public class RedisServer {
         }
         else output.append("# Replication\r\nrole:slave\r\n");
 
-
         return RespResponseUtility.getBulkString(output.toString());
+    }
+
+    private String replconf(String[] args) {
+        return "OK";
     }
 }
