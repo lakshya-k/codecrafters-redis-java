@@ -646,6 +646,6 @@ public class RedisServer {
     }
 
     private String psync(String[] args) {
-        return "FULLSYNC " + replicationId + " 0";
+        return "FULLRESYNC " + replicationId + " 0";
     }
 }
