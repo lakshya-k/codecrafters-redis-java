@@ -1,4 +1,8 @@
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -45,6 +49,9 @@ public class RedisServer {
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
             // ensures that we don't run into 'Address already in use' errors
             serverSocket.setReuseAddress(true);
+
+            if (replicaOf != null) pingMaster();
+
             int id = 0;
 
             while (true) {
@@ -72,6 +79,21 @@ public class RedisServer {
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
+    }
+
+    private void pingMaster() throws IOException {
+        String[] hostIp = replicaOf.split(" ");
+        String ip = hostIp[0];
+        int port = Integer.parseInt(hostIp[1]);
+
+        Socket clientSocket = new Socket(ip, port);
+        BufferedReader inFromServer = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        OutputStream outputStream = clientSocket.getOutputStream();
+
+        outputStream.write(RespResponseUtility.getRespArray(Collections.singletonList("PING")).getBytes());
+
+        clientSocket.close();
+        inFromServer.close();
     }
 
     private void handleClient(Client client) throws IOException, InterruptedException {
