@@ -1,6 +1,9 @@
+import javax.xml.crypto.Data;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -23,23 +26,32 @@ public class Client {
         inTransaction = false;
     }
 
-    public String read() {
-        String result = "";
+    public byte[] read() {
+        byte[] input = new byte[1024];
         try{
-            byte[] input = new byte[1024];
             inputStream.read(input);
-
-            return new String(input);
+            return input;
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
 
-        return result;
+        return input;
     }
 
     public boolean send(String output) throws IOException {
         outputStream.write(output.getBytes());
+        outputStream.flush();
         return true;
+    }
+
+    public boolean send(byte[] output) throws IOException {
+        if (output != null) {
+            outputStream.write(output);
+            outputStream.flush();
+            return true;
+        }
+
+        return false;
     }
 
     public boolean closeSocket() {
