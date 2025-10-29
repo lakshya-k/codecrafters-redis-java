@@ -77,4 +77,8 @@ public class Client {
         enqueuedCommands.add(args);
         return true;
     }
+
+    public OutputStream getOutputStream() {
+        return outputStream;
+    }
 }

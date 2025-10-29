@@ -2,11 +2,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +14,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class RedisServer {
+    // BASe64
+    private static final String RDB =
+            "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2";
     private final UUID id;
     // In-memory hashmap to store key:value,expiration
     private HashMap<String, Value<?>> map;
@@ -138,7 +141,7 @@ public class RedisServer {
         }
     }
 
-    private String processInput(String input, Client client) throws InterruptedException {
+    private String processInput(String input, Client client) throws InterruptedException, IOException {
         String result = "";
         String[] args = input.split("\r\n");
         if (args.length > 2) {
@@ -175,7 +178,7 @@ public class RedisServer {
                         client.enqueueCommand(args);
                         result = RespResponseUtility.getSimpleString("QUEUED");
                     } else {
-                        result =  parseCommand(args, true);
+                        result =  parseCommand(args, true, client);
                     }
                 }
             }
@@ -183,7 +186,7 @@ public class RedisServer {
         return result;
     }
 
-    private String processEnqueuedCommands(Client client) throws InterruptedException {
+    private String processEnqueuedCommands(Client client) throws InterruptedException, IOException {
         List<String> outputs = new ArrayList<>();
         List<String> operations = new ArrayList<>();
 
@@ -191,7 +194,7 @@ public class RedisServer {
             for (String[] enqueuedCommand : client.getEnqueuedCommands()) {
                 String[] args = enqueuedCommand;
                 operations.add(enqueuedCommand[2].toLowerCase());
-                String output = parseCommand(args, false);
+                String output = parseCommand(args, false, client);
                 outputs.add(output);
             }
         }
@@ -200,7 +203,7 @@ public class RedisServer {
         return RespResponseUtility.getRespArray(operations, outputs);
     }
 
-    private String parseCommand(String[] args, boolean format) throws InterruptedException {
+    private String parseCommand(String[] args, boolean format, Client client) throws InterruptedException, IOException {
         String command = "";
         String output = "";
         if (args.length > 2) {
@@ -224,7 +227,7 @@ public class RedisServer {
                 case "incr" -> incr(args);
                 case "info" -> info(args);
                 case "replconf" -> replconf(args);
-                case "psync" -> psync(args);
+                case "psync" -> psync(args, client);
                 default -> "";
             };
         }
@@ -645,7 +648,28 @@ public class RedisServer {
         return "OK";
     }
 
-    private String psync(String[] args) {
-        return "FULLRESYNC " + replicationId + " 0";
+    private String psync(String[] args, Client client) throws IOException {
+        String output = RespResponseUtility.getSimpleString("FULLRESYNC " + replicationId + " 0");
+        byte[] rdbBytes = hexStringToByteArray(RDB);
+        output += "$" + rdbBytes.length + "\r\n";
+        client.getOutputStream().write(output.getBytes());
+        client.getOutputStream().write(rdbBytes);
+
+        return "";
+    }
+
+    public static byte[] hexStringToByteArray(String hexString) {
+        // The length of the hex string should be even.
+        int len = hexString.length();
+        if (len % 2 != 0) {
+            throw new IllegalArgumentException("Hex string must have an even number of characters.");
+        }
+
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hexString.charAt(i), 16) << 4)
+                    + Character.digit(hexString.charAt(i + 1), 16));
+        }
+        return data;
     }
 }
