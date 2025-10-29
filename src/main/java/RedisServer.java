@@ -107,6 +107,15 @@ public class RedisServer {
         capa.add("psync2");
 
         outputStream.write(RespResponseUtility.getRespArray(capa).getBytes());
+        inFromServer.readLine();
+
+        List<String> psync = new ArrayList<>();
+        psync.add("PSYNC");
+        psync.add("?");
+        psync.add("-1");
+
+        outputStream.write(RespResponseUtility.getRespArray(psync).getBytes());
+        inFromServer.readLine();
 
         clientSocket.close();
         inFromServer.close();
@@ -215,6 +224,7 @@ public class RedisServer {
                 case "incr" -> incr(args);
                 case "info" -> info(args);
                 case "replconf" -> replconf(args);
+                case "psync" -> psync(args);
                 default -> "";
             };
         }
@@ -633,5 +643,9 @@ public class RedisServer {
 
     private String replconf(String[] args) {
         return "OK";
+    }
+
+    private String psync(String[] args) {
+        return "FULLSYNC " + replicationId + " 0";
     }
 }
