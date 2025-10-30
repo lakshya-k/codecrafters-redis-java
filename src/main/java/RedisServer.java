@@ -4,6 +4,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.StandardSocketOptions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -159,14 +160,13 @@ public class RedisServer {
         try {
             while (true) {
                 String input = new String(client.read());
-                String cleanedInput = input.replaceAll("\0+$", "");
                 if (!input.isEmpty()) {
-                    String output = commandHandler.processInput(cleanedInput, client);
+                    String output = commandHandler.processInput(input, client);
                     if (output != null && !output.isBlank()) {
                         client.send(output);
                         executorService.execute(() -> {
                             try {
-                                propagateToReplicas(cleanedInput);
+                                propagateToReplicas(input);
                             } catch (IOException e) {
                                 throw new RuntimeException(e);
                             }
@@ -188,6 +188,7 @@ public class RedisServer {
     }
 
     private void propagateToReplicas(String input) throws IOException {
+        input = input.replaceAll("\0+$", "");
         if (!RespResponseUtility.shouldSendToReplica(input)) return;
 
         for (int i = 0; i < replicas.size(); ++i) {
