@@ -527,9 +527,9 @@ public class CommandHandler {
         String output = RespResponseUtility.getSimpleString("FULLRESYNC " + server.getReplicationId() + " 0");
         byte[] rdbBytes = hexStringToByteArray(RDB);
         output += "$" + rdbBytes.length + "\r\n";
-        client.getOutputStream().write(output.getBytes());
-        client.getOutputStream().write(rdbBytes);
-        //TODO: Return output from this method instead of sending respose to client directly
+        client.send(output.getBytes());
+        client.send(rdbBytes);
+        //TODO: Return output from this method instead of sending response to client directly
         server.registerReplica(client);
 
         return null;

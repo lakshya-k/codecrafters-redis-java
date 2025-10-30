@@ -1,27 +1,19 @@
-import javax.xml.crypto.Data;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 
 public class Client {
     private int id;
     private Socket socket;
-    private InputStream inputStream;
-    private OutputStream outputStream;
     private boolean inTransaction;
     private List<String[]> enqueuedCommands;
 
-    public Client(int id, Socket socket, InputStream inputStream, OutputStream outputStream) {
+    public Client(int id, Socket socket) throws IOException {
         this.id = id;
         this.socket = socket;
-        this.inputStream = inputStream;
-        this.outputStream = outputStream;
         enqueuedCommands = new ArrayList<>();
         inTransaction = false;
     }
@@ -29,6 +21,7 @@ public class Client {
     public byte[] read() {
         byte[] input = new byte[1024];
         try{
+            InputStream inputStream = socket.getInputStream();
             inputStream.read(input);
             return input;
         } catch (IOException e) {
@@ -39,19 +32,30 @@ public class Client {
     }
 
     public boolean send(String output) throws IOException {
-        outputStream.write(output.getBytes());
-        outputStream.flush();
-        return true;
+        synchronized (this) {
+            try {
+                OutputStream outputStream = socket.getOutputStream();
+                outputStream.write(output.getBytes());
+                outputStream.flush();
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
+        }
     }
 
     public boolean send(byte[] output) throws IOException {
-        if (output != null) {
-            outputStream.write(output);
-            outputStream.flush();
+        try{
+            if (output != null) {
+                OutputStream outputStream = socket.getOutputStream();
+                outputStream.write(output);
+                outputStream.flush();
+            }
             return true;
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+            return false;
         }
-
-        return false;
     }
 
     public boolean closeSocket() {
@@ -88,9 +92,5 @@ public class Client {
     public boolean enqueueCommand(String[] args) {
         enqueuedCommands.add(args);
         return true;
-    }
-
-    public OutputStream getOutputStream() {
-        return outputStream;
     }
 }

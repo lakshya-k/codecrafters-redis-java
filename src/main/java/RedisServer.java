@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class RedisServer {
     // BASe64
@@ -29,7 +31,7 @@ public class RedisServer {
     private CommandHandler commandHandler;
     private List<String> enqueuedOutputs = new ArrayList<>();
     private List<String> commands = new ArrayList<>();
-    private int cnt;
+    ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     public RedisServer(UUID id) {
         this.id = id;
@@ -38,7 +40,6 @@ public class RedisServer {
         port = 6379;
         commandHandler = new CommandHandler(this, map);
         replicas = new ArrayList<>();
-        cnt = 1;
     }
 
     public void setPort(int port) {
@@ -95,8 +96,7 @@ public class RedisServer {
                 ++id;
                 Socket assignedSocket = clientSocket;
 
-                Client client = new Client(id, assignedSocket, assignedSocket.getInputStream(),
-                        assignedSocket.getOutputStream());
+                Client client = new Client(id, assignedSocket);
 
                 CompletableFuture.runAsync(() -> {
                     try {
@@ -155,29 +155,15 @@ public class RedisServer {
         }
     }
 
-//    private void startReceivingCommands(BufferedReader reader) {
-//        System.out.println("Replica ready to receive commands from master");
-//        String input = "";
-//
-//        while (true) {
-//            try{
-//                input = reader.readLine();
-//            } catch (IOException e) {
-//                System.out.println("IOException: " + e.getMessage());
-//            }
-//        }
-//    }
-
     private void handleClient(Client client) throws IOException, InterruptedException {
         try {
             while (true) {
                 String input = new String(client.read());
-                //String output = processInput(input, client);
-                if (input != null) {
+                if (!input.isEmpty()) {
                     String output = commandHandler.processInput(input, client);
                     if (output != null && !output.isBlank()) {
                         client.send(output);
-                        CompletableFuture.runAsync(() -> {
+                        executorService.execute(() -> {
                             try {
                                 propagateToReplicas(input);
                             } catch (IOException e) {
@@ -201,14 +187,11 @@ public class RedisServer {
     }
 
     private void propagateToReplicas(String input) throws IOException {
-        String result = "";
-        cnt++;
+        if (!RespResponseUtility.shouldSendToReplica(input)) return;
+        input = input.replaceAll("\0+$", "");
 
         for (int i = 0; i < replicas.size(); ++i) {
-            result = "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\n123\r\n";
-            result += "*3\r\n$3\r\nSET\r\n$3\r\nbar\r\n$3\r\n456\r\n";
-            result += "*3\r\n$3\r\nSET\r\n$3\r\nbaz\r\n$3\r\n789\r\n";
-            if (cnt % 3 == 0) replicas.get(i).send(result);
+            replicas.get(i).send(input);
         }
     }
 
