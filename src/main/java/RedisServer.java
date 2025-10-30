@@ -159,13 +159,14 @@ public class RedisServer {
         try {
             while (true) {
                 String input = new String(client.read());
+                String cleanedInput = input.replaceAll("\0+$", "");
                 if (!input.isEmpty()) {
-                    String output = commandHandler.processInput(input, client);
+                    String output = commandHandler.processInput(cleanedInput, client);
                     if (output != null && !output.isBlank()) {
                         client.send(output);
                         executorService.execute(() -> {
                             try {
-                                propagateToReplicas(input);
+                                propagateToReplicas(cleanedInput);
                             } catch (IOException e) {
                                 throw new RuntimeException(e);
                             }
@@ -188,7 +189,6 @@ public class RedisServer {
 
     private void propagateToReplicas(String input) throws IOException {
         if (!RespResponseUtility.shouldSendToReplica(input)) return;
-        input = input.replaceAll("\0+$", "");
 
         for (int i = 0; i < replicas.size(); ++i) {
             replicas.get(i).send(input);
