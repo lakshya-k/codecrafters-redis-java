@@ -66,7 +66,7 @@ public class RedisServer {
         return this.replicationId;
     }
 
-    public long getOffset() {
+    public synchronized long getOffset() {
         return this.offset;
     }
 
@@ -181,14 +181,16 @@ public class RedisServer {
 
                 List<String> inputs = populateInputs(input);
                 for (String i : inputs) {
-                    String cleanedinput = i.strip();
-                    if (!cleanedinput.isBlank() && !cleanedinput.equals("")) {
-                        String output = commandHandler.processInput(cleanedinput, client);
+                    String cleanedInput = i.strip();
+                    if (!cleanedInput.isBlank() && !cleanedInput.equals("")) {
+                        String output = commandHandler.processInput(cleanedInput, client);
                         if (output != null && !output.isBlank()) {
                             if (replicaOf != null) {
-                                if (!RespResponseUtility.shouldSendToReplica(cleanedinput)) {
+                                if (!RespResponseUtility.shouldSendToReplica(cleanedInput)) {
                                     client.send(output);
-                                } else {
+                                }
+                                synchronized (this) {
+                                    offset += input.length();
                                 }
                             } else {
                                 client.send(output);

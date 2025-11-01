@@ -77,7 +77,7 @@ public final class RespResponseUtility {
             String command = args[2].toLowerCase();
             if (command.equals("set") || command.equals("rpush") || command.equals("lpush") ||
                     command.equals("lpop") || command.equals("blpop") || command.equals("xadd") ||
-                    command.equals("incr")) {
+                    command.equals("incr") || command.equals("ping") || command.equals("replconf")) {
                 return true;
             }
         }
