@@ -560,6 +560,8 @@ public class CommandHandler {
     }
 
     public String wait(String[] args, Client client) {
+        System.out.println("Args: ");
+        for (String a : args) System.out.println(a);
         return String.valueOf(server.getReplicaCount());
     }
 }
