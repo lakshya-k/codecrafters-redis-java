@@ -225,6 +225,10 @@ public class RedisServer {
         replicas.add(replica);
     }
 
+    public int getReplicaCount() {
+        return replicas.size();
+    }
+
     private String getMasterIp() {
         if (replicaOf == null) return null;
         String[] hostIp = replicaOf.split(" ");
