@@ -522,8 +522,11 @@ public class CommandHandler {
     }
 
     private String replconf(String[] args, Client client) {
-        if (args[4].equals("GETACK")) return RespResponseUtility.getRespArray(Arrays.asList("REPLCONF", "ACK",
-                String.valueOf(server.getOffset())));
+        long offset = server.getOffset();
+        if (args[4].equals("GETACK")) {
+            List<String> outputs = Arrays.asList("REPLCONF", "ACK", String.valueOf(offset));
+            return RespResponseUtility.getRespArray(outputs);
+        }
 
         return RespResponseUtility.getSimpleString("OK");
     }

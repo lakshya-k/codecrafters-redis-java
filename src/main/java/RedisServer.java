@@ -178,6 +178,7 @@ public class RedisServer {
         try {
             while (true) {
                 String input = client.read();
+                if (input == null || input.isBlank()) continue;
 
                 List<String> inputs = populateInputs(input);
                 for (String i : inputs) {
@@ -186,8 +187,10 @@ public class RedisServer {
                         String output = commandHandler.processInput(cleanedInput, client);
                         if (output != null && !output.isBlank()) {
                             if (replicaOf != null) {
-                                if (!RespResponseUtility.shouldSendToReplica(cleanedInput)) {
+                                if (RespResponseUtility.shouldRespondToMaster(cleanedInput)) {
                                     client.send(output);
+                                } else {
+                                    System.out.println("Not sending to master for input = " + cleanedInput);
                                 }
                                 synchronized (this) {
                                     offset += input.length();

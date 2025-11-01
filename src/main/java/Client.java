@@ -20,20 +20,36 @@ public class Client {
         inTransaction = false;
     }
 
-    public String read() {
-        byte[] input = new byte[1024];
-        String output = "";
-        while (output.equals("")) {
-            try{
-                InputStream inputStream = socket.getInputStream();
-                inputStream.read(input);
-                output = new String(input).strip().replaceAll("\0+$", "");
-            } catch (IOException e) {
-                System.out.println("IOException: " + e.getMessage());
-            }
+    public String read() throws IOException {
+        InputStream inputStream = socket.getInputStream();
+        int data = inputStream.read(); // * or $
+
+        if(data == -1) return null;
+
+        // Get input size
+        StringBuilder size = new StringBuilder();
+        while((data = inputStream.read()) != -1) {
+            char c = (char) data;
+            size.append((char)data);
+
+            if (c == '\n') break;
         }
 
-        return output;
+        int inputSize = Integer.parseInt(size.toString().strip());
+
+        StringBuilder command = new StringBuilder("*" + inputSize + "\r\n");
+
+        for (int i = 0; i < 2 * inputSize; ++i) {
+            StringBuilder input = new StringBuilder();
+            while((data = inputStream.read()) != -1) {
+                char c = (char) data;
+                input.append((char)data);
+
+                if (c == '\n') break;
+            }
+            command.append(input);
+        }
+        return command.toString();
     }
 
     public boolean send(String output) throws IOException {
@@ -61,6 +77,21 @@ public class Client {
             System.out.println("IOException: " + e.getMessage());
             return false;
         }
+    }
+
+    private int getWordSize(InputStream inputStream) throws IOException {
+        int data = inputStream.read(); // $
+
+        // Get word size
+        StringBuilder size = new StringBuilder();
+        while((data = inputStream.read()) != -1) {
+            char c = (char) data;
+            size.append((char)data);
+
+            if (c == '\n') break;
+        }
+
+        return Integer.parseInt(size.toString().strip());
     }
 
     public Socket getSocket() {

@@ -77,7 +77,19 @@ public final class RespResponseUtility {
             String command = args[2].toLowerCase();
             if (command.equals("set") || command.equals("rpush") || command.equals("lpush") ||
                     command.equals("lpop") || command.equals("blpop") || command.equals("xadd") ||
-                    command.equals("incr") || command.equals("ping") || command.equals("replconf")) {
+                    command.equals("incr")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static boolean shouldRespondToMaster(String input) {
+        String[] args = input.split("\r\n");
+        if (args.length > 2) {
+            String command = args[2].toLowerCase();
+            if (command.equals("replconf") || command.equals("get") || command.equals("info")) {
                 return true;
             }
         }
