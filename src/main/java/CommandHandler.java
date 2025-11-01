@@ -103,6 +103,7 @@ public class CommandHandler {
                 case "info" -> info(args);
                 case "replconf" -> replconf(args, client);
                 case "psync" -> psync(args, client);
+                case "wait" -> wait(args, client);
                 default -> "";
             };
         }
@@ -556,5 +557,9 @@ public class CommandHandler {
                     + Character.digit(hexString.charAt(i + 1), 16));
         }
         return data;
+    }
+
+    public String wait(String[] args, Client client) {
+        return "0";
     }
 }

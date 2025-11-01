@@ -1,12 +1,9 @@
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -179,33 +176,26 @@ public class RedisServer {
             while (true) {
                 String input = client.read();
                 if (input == null || input.isBlank()) continue;
-
-                List<String> inputs = populateInputs(input);
-                for (String i : inputs) {
-                    String cleanedInput = i.strip();
-                    if (!cleanedInput.isBlank() && !cleanedInput.equals("")) {
-                        String output = commandHandler.processInput(cleanedInput, client);
-                        if (output != null && !output.isBlank()) {
-                            if (replicaOf != null) {
-                                if (RespResponseUtility.shouldRespondToMaster(cleanedInput)) {
-                                    client.send(output);
-                                } else {
-                                    System.out.println("Not sending to master for input = " + cleanedInput);
-                                }
-                                synchronized (this) {
-                                    offset += input.length();
-                                }
-                            } else {
-                                client.send(output);
-                                executorService.execute(() -> {
-                                    try {
-                                        propagateToReplicas(input);
-                                    } catch (IOException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                });
-                            }
+                String output = commandHandler.processInput(input, client);
+                if (output != null && !output.isBlank()) {
+                    if (replicaOf != null) {
+                        if (RespResponseUtility.shouldRespondToMaster(input)) {
+                            client.send(output);
+                        } else {
+                            System.out.println("Not sending to master for input = " + input);
                         }
+                        synchronized (this) {
+                            offset += input.length();
+                        }
+                    } else {
+                        client.send(output);
+                        executorService.execute(() -> {
+                            try {
+                                propagateToReplicas(input);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        });
                     }
                 }
             }
@@ -359,26 +349,5 @@ public class RedisServer {
         String output = new String(input);
 
         return output;
-    }
-
-    private List<String> populateInputs(String input) {
-        if (!input.contains("*")) return Collections.singletonList(input);
-        if (input.contains("*\r")) return Collections.singletonList(input);
-        String[] words = input.split("\r\n");
-        List<String> result = new ArrayList<>();
-
-        String word = "*";
-        for (int i = 1; i < words.length; ++i) {
-            if (words[i].startsWith("*")) {
-                result.add(word);
-                word = "*";
-            } else {
-                word += "\r\n";
-                word += words[i];
-            }
-        }
-        result.add(word);
-
-        return result;
     }
 }

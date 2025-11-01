@@ -58,7 +58,7 @@ public final class RespResponseUtility {
             case "echo", "bulk", "get", "xadd" -> {
                 output = getBulkString(output);
             }
-            case "rpush", "lpush", "llen", "incr" -> {
+            case "rpush", "lpush", "llen", "incr", "wait" -> {
                 output = getRespInteger(output);
             }
             case "lpop" -> {
