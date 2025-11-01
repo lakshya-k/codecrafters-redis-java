@@ -25,29 +25,27 @@ public class Client {
         if(data == -1) return null;
 
         // Get input size
-        StringBuilder size = new StringBuilder();
-        while((data = inputStream.read()) != -1) {
-            char c = (char) data;
-            size.append((char)data);
-
-            if (c == '\n') break;
-        }
-
-        int inputSize = Integer.parseInt(size.toString().strip());
+        int inputSize = Integer.parseInt(readNext(inputStream).strip());
 
         StringBuilder command = new StringBuilder("*" + inputSize + "\r\n");
 
         for (int i = 0; i < 2 * inputSize; ++i) {
-            StringBuilder input = new StringBuilder();
-            while((data = inputStream.read()) != -1) {
-                char c = (char) data;
-                input.append((char)data);
-
-                if (c == '\n') break;
-            }
-            command.append(input);
+            String word = readNext(inputStream);
+            command.append(word);
         }
         return command.toString();
+    }
+
+    public String readNext(InputStream inputStream) throws IOException {
+        StringBuilder result = new StringBuilder();
+        int data;
+        while((data = inputStream.read()) != -1) {
+            char c = (char) data;
+            result.append((char)data);
+
+            if (c == '\n') break;
+        }
+        return result.toString();
     }
 
     public boolean send(String output) throws IOException {
