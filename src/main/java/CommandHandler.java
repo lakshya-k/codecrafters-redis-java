@@ -103,7 +103,6 @@ public class CommandHandler {
                 case "info" -> info(args);
                 case "replconf" -> replconf(args, client);
                 case "psync" -> psync(args, client);
-                case "getack" -> getAck(args, client);
                 default -> "";
             };
         }
@@ -523,6 +522,8 @@ public class CommandHandler {
     }
 
     private String replconf(String[] args, Client client) {
+        System.out.println("REPLCONf args: ");
+        for(String a : args) System.out.println(a);
         return "OK";
     }
 
@@ -552,9 +553,4 @@ public class CommandHandler {
         }
         return data;
     }
-
-    public String getAck(String[] args, Client client) {
-        return RespResponseUtility.getRespArray(Arrays.asList("REPLCONF", "ACK", "0"));
-    }
-
 }
