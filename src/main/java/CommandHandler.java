@@ -65,7 +65,7 @@ public class CommandHandler {
         List<String> outputs = new ArrayList<>();
         List<String> operations = new ArrayList<>();
 
-        synchronized (this) {
+        synchronized (server) {
             for (String[] enqueuedCommand : client.getEnqueuedCommands()) {
                 String[] args = enqueuedCommand;
                 operations.add(enqueuedCommand[2].toLowerCase());
@@ -132,23 +132,23 @@ public class CommandHandler {
         } else {
             value = new Value<>(ValueType.STRING, words[6], -1L);
         }
-        synchronized (this) {
+        synchronized (server) {
             map.put(key, value);
         }
-
         return "OK";
     }
 
     private String get(String[] words) {
         String output = null;
-        synchronized (this) {
-            if (map.containsKey(words[4])) {
-                String value = (String) map.get(words[4]).getValue();
-                Long expiry = map.get(words[4]).getExpiry();
+        String key = words[4];
+        synchronized (server) {
+            if (map.containsKey(key)) {
+                String value = (String) map.get(key).getValue();
+                Long expiry = map.get(key).getExpiry();
                 if (expiry == -1 || expiry > System.currentTimeMillis()) {
                     output = value;
                 } else {
-                    map.remove(words[4]);
+                    map.remove(key);
                 }
             }
         }
@@ -158,11 +158,11 @@ public class CommandHandler {
     private String rpush(String[] words) {
         String key = words[4];
         List<String> elements = new ArrayList<>();
-        for (int i = 6; i < words.length - 1; i = i + 2) {
+        for (int i = 6; i < words.length; i = i + 2) {
             elements.add(words[i]);
         }
         List<String> values = new ArrayList<>();
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     values = (List<String>) map.get(key).getValue();
@@ -173,7 +173,7 @@ public class CommandHandler {
             values.addAll(elements);
 
             map.put(key, new Value<>(ValueType.LIST, values, -1L));
-            this.notifyAll();
+            server.notifyAll();
         }
         return String.valueOf(values.size());
     }
@@ -183,7 +183,7 @@ public class CommandHandler {
         int l = Integer.parseInt(words[6]);
         int r = Integer.parseInt(words[8]);
         String output = "";
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     List<String> elements = (List<String>) map.get(key).getValue();
@@ -204,12 +204,12 @@ public class CommandHandler {
     private String lpush(String[] words) {
         String key = words[4];
         List<String> elements = new ArrayList<>();
-        for (int i = 6; i < words.length - 1; i = i + 2) {
+        for (int i = 6; i < words.length; i = i + 2) {
             elements.add(words[i]);
         }
         Collections.reverse(elements);
         List<String> values = new ArrayList<>();
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     values = (List<String>) map.get(key).getValue();
@@ -220,7 +220,7 @@ public class CommandHandler {
             values.addAll(0, elements);
 
             map.put(key, new Value<>(ValueType.LIST, values, -1L));
-            this.notifyAll();
+            server.notifyAll();
         }
 
         return String.valueOf(values.size());
@@ -229,7 +229,7 @@ public class CommandHandler {
     private String llen(String[] words) {
         String key = words[4];
         int res = 0;
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     List<String> values = (List<String>) map.get(key).getValue();
@@ -248,7 +248,7 @@ public class CommandHandler {
         List<String> res = new ArrayList<>();
         int cnt = 1;
         if (words.length > 6) cnt = Integer.parseInt(words[6]);
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 if (map.get(key).getValueType() == ValueType.LIST) {
                     List<String> values = (List<String>) map.get(key).getValue();
@@ -275,18 +275,18 @@ public class CommandHandler {
         timeout *= 1000;
         String res = null;
 
-        synchronized (this) {
+        synchronized (server) {
             long beforeTimeInMillis = System.currentTimeMillis();
             long remainingTime = (long) timeout;
             List<String> values;
             if (timeout > 0) {
                 while (!map.containsKey(key) && remainingTime > 0) {
-                    this.wait((long) timeout);
+                    server.wait((long) timeout);
                     remainingTime = Math.min(0, beforeTimeInMillis + (long) timeout - System.currentTimeMillis());
                 }
             } else {
                 while (!map.containsKey(key)) {
-                    this.wait();
+                    server.wait();
                 }
             }
 
@@ -294,14 +294,14 @@ public class CommandHandler {
                 if (remainingTime > 0) {
                     values = (List<String>) map.get(key).getValue();
                     while (values.size() == 0) {
-                        this.wait(remainingTime);
+                        server.wait(remainingTime);
                         remainingTime = Math.min(0, beforeTimeInMillis + (long) timeout - System.currentTimeMillis());
                     }
                 }
             } else {
                 values = (List<String>) map.get(key).getValue();
                 while (values.size() == 0) {
-                    this.wait();
+                    server.wait();
                 }
             }
 
@@ -329,7 +329,7 @@ public class CommandHandler {
     private String type(String[] words) {
         String key = words[4];
         String res = "none";
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 res = map.get(key).getValueType().toString().toLowerCase();
             }
@@ -342,11 +342,11 @@ public class CommandHandler {
         String id = words[6];
         String output = "";
         HashMap<String, String> input = new HashMap<>();
-        for (int i = 8; i < words.length - 1; i = i + 4) input.put(words[i], words[i + 2]);
+        for (int i = 8; i < words.length; i = i + 4) input.put(words[i], words[i + 2]);
 
         Stream stream;
 
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 stream = (Stream) map.get(key).getValue();
             } else {
@@ -354,7 +354,7 @@ public class CommandHandler {
             }
             output = stream.add(id, input);
             map.put(key, new Value<>(ValueType.STREAM, stream, -1L));
-            this.notifyAll();
+            server.notifyAll();
         }
 
         return output;
@@ -371,7 +371,7 @@ public class CommandHandler {
         else upperLimit = words[8];
         String output = "";
 
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 Stream stream = (Stream) map.get(key).getValue();
                 output = stream.xrange(lowerLimit, upperLimit);
@@ -388,7 +388,10 @@ public class CommandHandler {
         long timeout = block ? Long.parseLong(words[6]) : -1L;
         List<String> keyRange = new ArrayList<>();
 
-        for (int j = block ? 10 : 6; j < words.length - 1; j += 2) {
+
+        for (int j = 0; j < words.length; ++j){
+        }
+        for (int j = block ? 10 : 6; j < words.length; j += 2) {
             if (keyRange.equals("$")) {
 
             } else {
@@ -400,24 +403,23 @@ public class CommandHandler {
         List<String> range = new ArrayList<>(keyRange.subList(keyRange.size()/2, keyRange.size()));
         List<String> updatedRange = new ArrayList<>();
 
-        for (int i = 0; i < keys.size(); ++i) {
-            if (range.get(i).equals("$")) {
-                if (map.containsKey(keys.get(i))) {
-                    Stream stream = (Stream) map.get(keys.get(i)).getValue();
-                    updatedRange.add(stream.getLastId());
-                } else {
-                    updatedRange.add("0-0");
-                }
-            } else {
-                updatedRange.add(range.get(i));
-            }
-        }
-
-        range = updatedRange;
-
         String output = "";
+        synchronized (server) {
+            for (int i = 0; i < keys.size(); ++i) {
+                if (range.get(i).equals("$")) {
+                    if (map.containsKey(keys.get(i))) {
+                        Stream stream = (Stream) map.get(keys.get(i)).getValue();
+                        updatedRange.add(stream.getLastId());
+                    } else {
+                        updatedRange.add("0-0");
+                    }
+                } else {
+                    updatedRange.add(range.get(i));
+                }
+            }
 
-        synchronized (this) {
+            range = updatedRange;
+
             if (timeout > 0) {
                 long beforeTimeInMillis = System.currentTimeMillis();
                 long remainingTime = timeout;
@@ -425,7 +427,7 @@ public class CommandHandler {
                 while(remainingTime > 0) {
                     if (subStringCount(output, "*") > 3) break;
 
-                    this.wait(remainingTime);
+                    server.wait(remainingTime);
                     remainingTime = Math.max(0, beforeTimeInMillis + remainingTime - System.currentTimeMillis());
                     output = xreadUtility(keys, range);
                 }
@@ -433,7 +435,7 @@ public class CommandHandler {
                 while(true) {
                     output = xreadUtility(keys, range);
                     if (subStringCount(output, "*") > 3) break;
-                    this.wait();
+                    server.wait();
                 }
             } else {
                 output = xreadUtility(keys, range);
@@ -485,7 +487,7 @@ public class CommandHandler {
         String key = words[4];
         String output = "";
 
-        synchronized (this) {
+        synchronized (server) {
             if (map.containsKey(key)) {
                 String value = (String) map.get(key).getValue();
                 try {

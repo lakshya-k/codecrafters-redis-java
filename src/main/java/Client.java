@@ -1,7 +1,9 @@
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,17 +20,20 @@ public class Client {
         inTransaction = false;
     }
 
-    public byte[] read() {
+    public String read() {
         byte[] input = new byte[1024];
-        try{
-            InputStream inputStream = socket.getInputStream();
-            inputStream.read(input);
-            return input;
-        } catch (IOException e) {
-            System.out.println("IOException: " + e.getMessage());
+        String output = "";
+        while (output.equals("")) {
+            try{
+                InputStream inputStream = socket.getInputStream();
+                inputStream.read(input);
+                output = new String(input).strip().replaceAll("\0+$", "");
+            } catch (IOException e) {
+                System.out.println("IOException: " + e.getMessage());
+            }
         }
 
-        return input;
+        return output;
     }
 
     public boolean send(String output) throws IOException {
@@ -56,6 +61,10 @@ public class Client {
             System.out.println("IOException: " + e.getMessage());
             return false;
         }
+    }
+
+    public Socket getSocket() {
+        return this.socket;
     }
 
     public boolean closeSocket() {

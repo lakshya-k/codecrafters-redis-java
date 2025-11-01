@@ -1,10 +1,10 @@
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.StandardSocketOptions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,11 +28,13 @@ public class RedisServer {
     private int port;
     private String replicaOf;
     private String replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+    private boolean replicationStatus;
     private long offset = 0;
     private CommandHandler commandHandler;
     private List<String> enqueuedOutputs = new ArrayList<>();
     private List<String> commands = new ArrayList<>();
     ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private Client master; // Master client. Initiated when handshake is completed.
 
     public RedisServer(UUID id) {
         this.id = id;
@@ -41,6 +43,7 @@ public class RedisServer {
         port = 6379;
         commandHandler = new CommandHandler(this, map);
         replicas = new ArrayList<>();
+        replicationStatus = false;
     }
 
     public void setPort(int port) {
@@ -79,13 +82,17 @@ public class RedisServer {
             // ensures that we don't run into 'Address already in use' errors
             serverSocket.setReuseAddress(true);
 
+            // Replica
             if (replicaOf != null) {
-                try {
-                    initiateHandshake();
-                    System.out.println("Master Handshake complete");
-                } catch (Exception e) {
-                    throw new RuntimeException(e.getMessage());
+                String ip = getMasterIp();
+                int port = getMasterPort();
+                if (ip == null || port == -1) {
+                    System.out.println("Replica does not have master configured");
                 }
+                Socket masterSocket = new Socket(ip, port);
+
+                initiateHandshake(masterSocket);
+                startReceivingCommandsFromMaster();
             }
 
             int id = 0;
@@ -112,34 +119,33 @@ public class RedisServer {
 
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
     // Used by Replicas to initiate connection with master.
-    private void initiateHandshake() throws Exception {
-        String ip = getMasterIp();
-        int port = getMasterPort();
-        if (ip == null || port == -1) {
-            throw new Exception("Replica does not have master configured");
-        }
-
-        Socket replicaSocket = new Socket(ip, port);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(replicaSocket.getInputStream()));
-        OutputStream outputStream = replicaSocket.getOutputStream();
-
+    private void initiateHandshake(Socket masterSocket) throws Exception {
         try {
             // Send PING to master
-            outputStream.write(RespResponseUtility.getRespArray(Collections.singletonList("PING")).getBytes());
-            if (reader.readLine().equals("+PONG")) {
+            String pingResponse = sendPing(masterSocket);
+            if (pingResponse.equals("+PONG")) {
                 // Send REPLCONF to master
-                sendReplconfMessage(outputStream);
-                if (reader.readLine().equals("+OK")) {
+                String replConfResponse = sendReplconfMessage(masterSocket);
+                if (replConfResponse.equals("+OK")) {
                     // Send REPLCONF CAPA PSYNC2 to master
-                    sendReplconfCapaPsync2(outputStream);
-                    if (reader.readLine().equals("+OK")) {
-                        sendPsync(outputStream);
-                        // TODO: Handle the response here
-                        //startReceivingCommands(reader);
+                    String replConfCapaPsync2 = sendReplconfCapaPsync2(masterSocket);
+                    if (replConfCapaPsync2.equals("+OK")) {
+                        String psync = sendPsync(masterSocket);
+                        if (psync.contains("FULLRESYNC")) {
+                            String RDB = receiveRDB(masterSocket);
+                            // TODO: Handle the response here
+                            //  System.out.println("Received RDB file");
+                            replicationStatus = true;
+
+                            master = new Client(0, masterSocket);
+                            System.out.println("Master Handshake complete");
+                        }
                     } else {
                         System.out.println("Failed on REPLCONF capa psync");
                     }
@@ -151,26 +157,50 @@ public class RedisServer {
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
-        } finally {
-            replicaSocket.close();
         }
+    }
+
+    // Replica
+    public void startReceivingCommandsFromMaster() throws IOException, InterruptedException {
+        System.out.println("Starting to receive commands from master = " + master);
+        CompletableFuture.runAsync(() -> {
+            try {
+                handleClient(master);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private void handleClient(Client client) throws IOException, InterruptedException {
         try {
             while (true) {
-                String input = new String(client.read());
-                if (!input.isEmpty()) {
-                    String output = commandHandler.processInput(input, client);
-                    if (output != null && !output.isBlank()) {
-                        client.send(output);
-                        executorService.execute(() -> {
-                            try {
-                                propagateToReplicas(input);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
+                String input = client.read();
+
+                List<String> inputs = populateInputs(input);
+                for (String i : inputs) {
+                    String cleanedinput = i.strip();
+                    if (!cleanedinput.isBlank() && !cleanedinput.equals("")) {
+                        String output = commandHandler.processInput(cleanedinput, client);
+                        if (output != null && !output.isBlank()) {
+                            if (replicaOf != null) {
+                                if (!RespResponseUtility.shouldSendToReplica(cleanedinput)) {
+                                    client.send(output);
+                                } else {
+                                }
+                            } else {
+                                client.send(output);
+                                executorService.execute(() -> {
+                                    try {
+                                        propagateToReplicas(input);
+                                    } catch (IOException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                });
                             }
-                        });
+                        }
                     }
                 }
             }
@@ -212,30 +242,138 @@ public class RedisServer {
         return Integer.parseInt(hostIp[1]);
     }
 
-    private void sendReplconfMessage(OutputStream outputStream) throws IOException {
+    private String sendPing(Socket socket) throws IOException {
+        InputStream inputStream = socket.getInputStream();
+        OutputStream outputStream = socket.getOutputStream();
+        outputStream.write(RespResponseUtility.getRespArray(Collections.singletonList("PING")).getBytes());
+
+        byte[] buffer = new byte[1024];
+        try{
+            inputStream.read(buffer);
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        }
+        String output = new String(buffer);
+        output = output.replaceAll("\0+$", "").strip();
+
+        return output;
+    }
+
+    private String sendReplconfMessage(Socket socket) throws IOException {
+        InputStream inputStream = socket.getInputStream();
+        OutputStream outputStream = socket.getOutputStream();
+
         List<String> replconf = new ArrayList<>();
         replconf.add("REPLCONF");
         replconf.add("listening-port");
         replconf.add(String.valueOf(this.port));
 
         outputStream.write(RespResponseUtility.getRespArray(replconf).getBytes());
+
+        byte[] buffer = new byte[1024];
+        try{
+            inputStream.read(buffer);
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        }
+        String output = new String(buffer);
+        output = output.replaceAll("\0+$", "").strip();
+
+        return output;
     }
 
-    private void sendReplconfCapaPsync2(OutputStream outputStream) throws IOException {
+    private String sendReplconfCapaPsync2(Socket socket) throws IOException {
+        InputStream inputStream = socket.getInputStream();
+        OutputStream outputStream = socket.getOutputStream();
+
         List<String> capa = new ArrayList<>();
         capa.add("REPLCONF");
         capa.add("capa");
         capa.add("psync2");
 
         outputStream.write(RespResponseUtility.getRespArray(capa).getBytes());
+
+        byte[] buffer = new byte[1024];
+        try{
+            inputStream.read(buffer);
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        }
+        String output = new String(buffer);
+        output = output.replaceAll("\0+$", "").strip();
+
+        return output;
     }
 
-    private void sendPsync(OutputStream outputStream) throws IOException {
+    private String sendPsync(Socket socket) throws IOException {
+        InputStream inputStream = socket.getInputStream();
+        OutputStream outputStream = socket.getOutputStream();
+
         List<String> psync = new ArrayList<>();
         psync.add("PSYNC");
         psync.add("?");
         psync.add("-1");
 
         outputStream.write(RespResponseUtility.getRespArray(psync).getBytes());
+
+        int data;
+        StringBuilder output = new StringBuilder();
+        while((data = inputStream.read()) != -1) {
+            char c = (char) data;
+            output.append(c);
+
+            if (c == '\n') break;
+        }
+
+        output = new StringBuilder(output.toString().replaceAll("\0+$", "").strip());
+
+        return output.toString();
+    }
+
+    private String receiveRDB (Socket socket) throws IOException {
+        InputStream inputStream = socket.getInputStream();
+        int data = inputStream.read(); // $
+
+        // Get RDB size
+        StringBuilder size = new StringBuilder();
+        while((data = inputStream.read()) != -1) {
+            char c = (char) data;
+            size.append((char)data);
+
+            if (c == '\n') break;
+        }
+
+        int rdbSize = Integer.parseInt(size.toString().strip());
+
+        byte[] input = new byte[rdbSize];
+        try{
+            inputStream.read(input);
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        }
+        String output = new String(input);
+
+        return output;
+    }
+
+    private List<String> populateInputs(String input) {
+        if (!input.contains("*")) return Collections.singletonList(input);
+        if (input.contains("*\r")) return Collections.singletonList(input);
+        String[] words = input.split("\r\n");
+        List<String> result = new ArrayList<>();
+
+        String word = "*";
+        for (int i = 1; i < words.length; ++i) {
+            if (words[i].startsWith("*")) {
+                result.add(word);
+                word = "*";
+            } else {
+                word += "\r\n";
+                word += words[i];
+            }
+        }
+        result.add(word);
+
+        return result;
     }
 }
