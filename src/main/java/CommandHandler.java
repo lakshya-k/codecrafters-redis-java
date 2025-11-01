@@ -522,8 +522,8 @@ public class CommandHandler {
     }
 
     private String replconf(String[] args, Client client) {
-        System.out.println("REPLCONf args: ");
-        for(String a : args) System.out.println(a);
+        if (args[4].equals("GETACK")) return RespResponseUtility.getRespArray(Arrays.asList("REPLCONF", "ACK", "0"));
+
         return "OK";
     }
 
