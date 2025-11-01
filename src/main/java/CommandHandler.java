@@ -103,6 +103,7 @@ public class CommandHandler {
                 case "info" -> info(args);
                 case "replconf" -> replconf(args, client);
                 case "psync" -> psync(args, client);
+                case "getack" -> getAck(args, client);
                 default -> "";
             };
         }
@@ -550,6 +551,10 @@ public class CommandHandler {
                     + Character.digit(hexString.charAt(i + 1), 16));
         }
         return data;
+    }
+
+    public String getAck(String[] args, Client client) {
+        return RespResponseUtility.getRespArray(Arrays.asList("REPLCONF", "ACK", "0"));
     }
 
 }
