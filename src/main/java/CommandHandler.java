@@ -524,7 +524,7 @@ public class CommandHandler {
     private String replconf(String[] args, Client client) {
         if (args[4].equals("GETACK")) return RespResponseUtility.getRespArray(Arrays.asList("REPLCONF", "ACK", "0"));
 
-        return "OK";
+        return RespResponseUtility.getSimpleString("OK");
     }
 
     private String psync(String[] args, Client client) throws IOException {

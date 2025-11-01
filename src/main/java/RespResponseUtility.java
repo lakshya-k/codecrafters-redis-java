@@ -52,7 +52,7 @@ public final class RespResponseUtility {
         if (output != null && output.startsWith("-ERR")) return output;
 
         switch (command) {
-            case "ping", "set", "type", "replconf" -> {
+            case "ping", "set", "type" -> {
                 output = getSimpleString(output);
             }
             case "echo", "bulk", "get", "xadd" -> {
