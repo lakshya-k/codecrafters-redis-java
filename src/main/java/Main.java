@@ -8,7 +8,14 @@ public class Main {
             arguments.put(args[i], args[i + 1]);
         }
         UUID id = UUID.randomUUID();
-        RedisServer server = new RedisServer(id);
+        String dir = ".";
+        String dbfilename = "/tmp/redis-data";
+
+        if (arguments.containsKey("--dir")) dir = arguments.get("--dir");
+        if (arguments.containsKey("--dbfilename")) dbfilename = arguments.get("--dbfilename");
+
+        RedisConfig config = new RedisConfig(dir, dbfilename);
+        RedisServer server = new RedisServer(id, config);
 
         if (arguments.containsKey("--port")) server.setPort(Integer.parseInt(arguments.get("--port")));
         if (arguments.containsKey("--replicaof")) server.setReplicaOf(arguments.get("--replicaof"));

@@ -109,6 +109,7 @@ public class CommandHandler {
                 case "replconf" -> replconf(args, client);
                 case "psync" -> psync(args, client);
                 case "wait" -> wait(args, client);
+                case "config" -> config(args, client);
                 default -> "";
             };
         }
@@ -611,5 +612,13 @@ public class CommandHandler {
         server.resetNumCommandsAfterLastAck();
 
         return String.valueOf(ackReplica);
+    }
+
+    public String config(String[] args, Client client) {
+        if (args[6].equals("dir")) {
+            return RespResponseUtility.getRespArray(Arrays.asList("dir", server.getRedisConfig().getDir()));
+        } else {
+            return RespResponseUtility.getRespArray(Arrays.asList("dir", server.getRedisConfig().getDbFilename()));
+        }
     }
 }

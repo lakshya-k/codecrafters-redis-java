@@ -37,8 +37,9 @@ public class RedisServer {
     private List<String> commands = new ArrayList<>();
     ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Client master; // Master client. Initiated when handshake is completed.
+    private RedisConfig config;
 
-    public RedisServer(UUID id) {
+    public RedisServer(UUID id, RedisConfig config) {
         this.id = id;
         clientCount = 0;
         map = new HashMap<>();
@@ -47,6 +48,7 @@ public class RedisServer {
         replicaClients = new HashMap<>();
         replicaOffset = new HashMap<>();
         replicationStatus = false;
+        this.config = config;
     }
 
     public void setPort(int port) {
@@ -95,6 +97,10 @@ public class RedisServer {
 
     public void incrementNumCommandsAfterLastAck(){
         numCommandsAfterLastAck.incrementAndGet();
+    }
+
+    public RedisConfig getRedisConfig() {
+        return this.config;
     }
 
     public void start() {
