@@ -1,15 +1,20 @@
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class CommandHandler {
     private static final String RDB =
             "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2";
     private final RedisServer server;
     private final HashMap<String, Value<?>> map;
+    private final Object waitLock = new Object();
 
     public CommandHandler(RedisServer server, HashMap<String, Value<?>> map) {
         this.server = server;
@@ -527,6 +532,14 @@ public class CommandHandler {
         if (args[4].equals("GETACK")) {
             List<String> outputs = Arrays.asList("REPLCONF", "ACK", String.valueOf(offset));
             return RespResponseUtility.getRespArray(outputs);
+        } else if (args[4].equals("ACK")) {
+            long receivedOffset = Long.parseLong(args[6]);
+            synchronized (waitLock) {
+                server.incrementReplicaAcks();
+                waitLock.notifyAll();
+
+            }
+            return "";
         }
 
         return RespResponseUtility.getSimpleString("OK");
@@ -559,9 +572,44 @@ public class CommandHandler {
         return data;
     }
 
-    public String wait(String[] args, Client client) {
-        System.out.println("Args: ");
-        for (String a : args) System.out.println(a);
-        return String.valueOf(server.getReplicaCount());
+    public String wait(String[] args, Client client) throws InterruptedException {
+        server.resetReplicaAcks();
+        if (server.getNumCommandsAfterLastAck() == 0) {
+            return String.valueOf(server.getReplicaCount());
+        }
+        int numReplica = Integer.parseInt(args[4]);
+        long timeout = Long.parseLong(args[6]);
+        int ackReplica = 0;
+        int i = 1;
+
+        for (Client replica : server.getReplicaClients().values()) {
+            ++i;
+            CompletableFuture.runAsync(() -> {
+                try {
+                    replica.send(RespResponseUtility.getRespArray(Arrays.asList("REPLCONF", "GETACK", "*")));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+
+        synchronized (waitLock) {
+            long beforeTimeInMillis = System.currentTimeMillis();
+            long remainingTime = timeout;
+
+            //ackReplica = server.getUpdateReplicaCount();
+            ackReplica = server.getReplicaAcks();
+
+            while (ackReplica < numReplica && remainingTime > 0) {
+                waitLock.wait(remainingTime);
+                ackReplica = server.getReplicaAcks();
+                //ackReplica = server.getUpdateReplicaCount();
+                remainingTime = Math.max(0, beforeTimeInMillis + timeout - System.currentTimeMillis());
+            }
+        }
+
+        server.resetNumCommandsAfterLastAck();
+
+        return String.valueOf(ackReplica);
     }
 }

@@ -1,5 +1,7 @@
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -10,36 +12,46 @@ public class Client {
     private Socket socket;
     private boolean inTransaction;
     private List<String[]> enqueuedCommands;
+    private BufferedReader reader;
 
     public Client(int id, Socket socket) throws IOException {
         this.id = id;
         this.socket = socket;
         enqueuedCommands = new ArrayList<>();
         inTransaction = false;
+        InputStream inputStream = socket.getInputStream();
+        InputStreamReader isr = new InputStreamReader(inputStream, "UTF-8");
+        reader = new BufferedReader(isr);
+    }
+
+    public int getId() {
+        return id;
     }
 
     public String read() throws IOException {
-        InputStream inputStream = socket.getInputStream();
-        int data = inputStream.read(); // * or $
+        //int data = inputStream.read(); // * or $
+        int data = reader.read();
 
         if(data == -1) return null;
+        if (!String.valueOf((char) data).equals("*")) return null;
 
         // Get input size
-        int inputSize = Integer.parseInt(readNext(inputStream).strip());
+        int inputSize = Integer.parseInt(readNext(reader).strip());
 
         StringBuilder command = new StringBuilder("*" + inputSize + "\r\n");
 
         for (int i = 0; i < 2 * inputSize; ++i) {
-            String word = readNext(inputStream);
+            String word = readNext(reader);
+            while(word == null || word.isBlank()) word = readNext(reader);
             command.append(word);
         }
         return command.toString();
     }
 
-    public String readNext(InputStream inputStream) throws IOException {
+    public String readNext(BufferedReader reader) throws IOException {
         StringBuilder result = new StringBuilder();
         int data;
-        while((data = inputStream.read()) != -1) {
+        while((data = reader.read()) != -1) {
             char c = (char) data;
             result.append((char)data);
 
@@ -73,25 +85,6 @@ public class Client {
             System.out.println("IOException: " + e.getMessage());
             return false;
         }
-    }
-
-    private int getWordSize(InputStream inputStream) throws IOException {
-        int data = inputStream.read(); // $
-
-        // Get word size
-        StringBuilder size = new StringBuilder();
-        while((data = inputStream.read()) != -1) {
-            char c = (char) data;
-            size.append((char)data);
-
-            if (c == '\n') break;
-        }
-
-        return Integer.parseInt(size.toString().strip());
-    }
-
-    public Socket getSocket() {
-        return this.socket;
     }
 
     public boolean closeSocket() {

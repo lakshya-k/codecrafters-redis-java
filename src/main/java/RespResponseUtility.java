@@ -96,4 +96,19 @@ public final class RespResponseUtility {
 
         return false;
     }
+
+    public static boolean shouldUpdateOffset(String input) {
+        String[] args = input.split("\r\n");
+        if (args.length > 2) {
+            String command = args[2].toLowerCase();
+            if (command.equals("replconf")) {
+                if (args.length > 4) {
+                    return args[4].toLowerCase().equals("getack");
+                }
+            } else if (command.equals("psync") || command.equals("info")) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

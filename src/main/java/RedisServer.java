@@ -7,10 +7,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RedisServer {
     // BASe64
@@ -21,7 +23,10 @@ public class RedisServer {
     private HashMap<String, Value<?>> map;
     private int clientCount;
     // List of Replicas
-    private List<Client> replicas;
+    private Map<Integer, Client> replicaClients;
+    private Map<Integer, Long> replicaOffset;
+    private AtomicInteger replicaAcks = new AtomicInteger(0);
+    private AtomicInteger numCommandsAfterLastAck = new AtomicInteger(0);
     private int port;
     private String replicaOf;
     private String replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
@@ -39,7 +44,8 @@ public class RedisServer {
         map = new HashMap<>();
         port = 6379;
         commandHandler = new CommandHandler(this, map);
-        replicas = new ArrayList<>();
+        replicaClients = new HashMap<>();
+        replicaOffset = new HashMap<>();
         replicationStatus = false;
     }
 
@@ -65,6 +71,30 @@ public class RedisServer {
 
     public synchronized long getOffset() {
         return this.offset;
+    }
+
+    public int getReplicaAcks() {
+        return replicaAcks.get();
+    }
+
+    public void resetReplicaAcks() {
+        replicaAcks.set(0);
+    }
+
+    public void incrementReplicaAcks(){
+        replicaAcks.incrementAndGet();
+    }
+
+    public int getNumCommandsAfterLastAck() {
+        return numCommandsAfterLastAck.get();
+    }
+
+    public void resetNumCommandsAfterLastAck() {
+        numCommandsAfterLastAck.set(0);
+    }
+
+    public void incrementNumCommandsAfterLastAck(){
+        numCommandsAfterLastAck.incrementAndGet();
     }
 
     public void start() {
@@ -159,7 +189,7 @@ public class RedisServer {
 
     // Replica
     public void startReceivingCommandsFromMaster() throws IOException, InterruptedException {
-        System.out.println("Starting to receive commands from master = " + master);
+        //System.out.println("Starting to receive commands from master = " + master);
         CompletableFuture.runAsync(() -> {
             try {
                 handleClient(master);
@@ -178,14 +208,16 @@ public class RedisServer {
                 if (input == null || input.isBlank()) continue;
                 String output = commandHandler.processInput(input, client);
                 if (output != null && !output.isBlank()) {
+                    synchronized (this) {
+                        if (RespResponseUtility.shouldUpdateOffset(input)) {
+                            offset += input.length();
+                        }
+                    }
                     if (replicaOf != null) {
                         if (RespResponseUtility.shouldRespondToMaster(input)) {
                             client.send(output);
                         } else {
-                            System.out.println("Not sending to master for input = " + input);
-                        }
-                        synchronized (this) {
-                            offset += input.length();
+                            //System.out.println("Not sending to master for input = " + input);
                         }
                     } else {
                         client.send(output);
@@ -215,18 +247,32 @@ public class RedisServer {
     private void propagateToReplicas(String input) throws IOException {
         input = input.replaceAll("\0+$", "");
         if (!RespResponseUtility.shouldSendToReplica(input)) return;
+        incrementNumCommandsAfterLastAck();
 
-        for (int i = 0; i < replicas.size(); ++i) {
-            replicas.get(i).send(input);
+        for (Client c : replicaClients.values()) {
+            c.send(input);
         }
     }
 
     void registerReplica(Client replica) {
-        replicas.add(replica);
+        replicaClients.put(replica.getId(), replica);
+        replicaOffset.put(replica.getId(), 0L);
+    }
+
+    void updateReplicaOffset(int id, long offset) {
+        replicaOffset.put(id, offset);
     }
 
     public int getReplicaCount() {
-        return replicas.size();
+        return replicaClients.size();
+    }
+
+    public Map<Integer, Client> getReplicaClients() {
+        return this.replicaClients;
+    }
+
+    public Map<Integer, Long> getReplicaOffset() {
+        return this.replicaOffset;
     }
 
     private String getMasterIp() {
